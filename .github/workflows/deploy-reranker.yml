@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'packages/reranker-wasm/**'
-      - 'packages/client-dedup-wasm/**'
       - 'packages/wasm-math/**'
       - 'apps/reranker-worker/**'
       - '.github/workflows/deploy-reranker.yml'
@@ -46,10 +45,6 @@ jobs:
 
       - name: Build Reranker WASM Utilities
         working-directory: packages/reranker-wasm
-        run: wasm-pack build --target bundler --release
-
-      - name: Build Client Dedup WASM
-        working-directory: packages/client-dedup-wasm
         run: wasm-pack build --target bundler --release
 
       - name: Deploy Cloudflare Worker

@@ -21,9 +21,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run TypeScript type checking
-        run: bunx turbo run check-types --filter='@smaranai/ai-sdk' --filter='@smaranai/memory-graph'
-
       - name: Type-check the memory engine
         run: bunx turbo run check-types --filter='@repo/core' --filter='@repo/db' --filter='@repo/api' --filter='@repo/language' --filter='@repo/voice' --filter='@repo/models'
 

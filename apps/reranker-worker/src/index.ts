@@ -6,7 +6,7 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-app.post('/v3/search/rerank', async (c) => {
+app.post('/v1/rerank', async (c) => {
   try {
     const body = await c.req.json<{
       query: string;

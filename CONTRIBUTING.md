@@ -35,7 +35,8 @@ smaran/
 │   ├── edge-recall/        Cloudflare Worker — KV hot cache tier
 │   ├── starter-vapi/       Runnable Vapi voice-agent-with-memory template
 │   ├── reranker-worker/    BAAI cross-encoder as a CF Worker
-│   └── web/                Next.js dashboard
+│   ├── site/               Marketing site + docs (Next.js)
+│   └── voice-agent-livekit/ Python LiveKit voice agent demo
 ├── packages/
 │   ├── core/               Provider-agnostic memory engine + adapter contract
 │   ├── db/                 Drizzle schema + Postgres store + graph store
@@ -81,7 +82,7 @@ If either fails, the PR is blocked. Run both locally before pushing.
 **Highest impact** (helps everyone downstream):
 - Fill in more Hinglish markers / Devanagari coverage in `packages/language`
 - Add adapters for frameworks not yet covered (CrewAI, AutoGen, Semantic Kernel, LlamaIndex, Bolna, Retell)
-- Real benchmark datasets in `packages/benchmark` — a CI-integrated recall benchmark on public voice-agent data is the single most valuable contribution right now
+- A real benchmark dataset — a CI-integrated recall benchmark on public voice-agent data is the single most valuable contribution right now
 
 **Medium impact**:
 - Voice-platform SDK plugins (Retell, Bland, Pipecat proper)

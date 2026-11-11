@@ -1,6 +1,6 @@
 import { PostHog } from "posthog-node"
 
-const MCP_SERVER_VERSION = "4.0.0"
+const MCP_SERVER_VERSION = "0.1.0"
 
 /**
  * PostHog singleton for analytics.
@@ -35,16 +35,12 @@ function getInstance(): PostHog | null {
 
 export async function memoryAdded(props: {
 	type: "note" | "link" | "file"
-	project_id?: string
 	content_length?: number
-	file_size?: number
-	file_type?: string
 	source?: string
 	userId: string
 	mcp_client_name?: string
 	mcp_client_version?: string
 	sessionId?: string
-	containerTag?: string
 }): Promise<void> {
 	const client = getInstance()
 	if (!client) return
@@ -67,13 +63,11 @@ export async function memorySearch(props: {
 	query_length: number
 	results_count: number
 	search_duration_ms: number
-	container_tags_count?: number
 	source?: string
 	userId: string
 	mcp_client_name?: string
 	mcp_client_version?: string
 	sessionId?: string
-	containerTag?: string
 }): Promise<void> {
 	const client = getInstance()
 	if (!client) return
@@ -99,7 +93,6 @@ export async function memoryForgot(props: {
 	mcp_client_name?: string
 	mcp_client_version?: string
 	sessionId?: string
-	containerTag?: string
 }): Promise<void> {
 	const client = getInstance()
 	if (!client) return

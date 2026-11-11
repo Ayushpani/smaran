@@ -48,8 +48,6 @@ models/
 *.pt
 *.pth
 *.safetensors
-packages/benchmark/results/
-packages/benchmark/data/
 
 # Python & Scripts
 __pycache__/

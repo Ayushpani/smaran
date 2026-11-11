@@ -41,7 +41,7 @@ app.use("*", async (c, next) => {
 app.get("/", (c) => {
 	return c.json({
 		name: "smaran-mcp",
-		version: "4.0.0",
+		version: "0.1.0",
 		description: "Give your AI a memory",
 		docs: "https://github.com/Ayushpani/smaran",
 	})

@@ -1,120 +1,51 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## Repository Structure
+## What this is
 
-This is a **Turbo monorepo** containing multiple applications and shared packages:
+Smaran is a self-hosted, voice-first memory API for AI agents. A Bun + Hono
+HTTP API (`apps/api`) wraps a provider-agnostic memory engine
+(`packages/core`) backed by either an in-process store (sandbox) or
+Postgres + pgvector (`packages/db`).
 
-### Applications (`apps/`)
-- **`web/`** - Next.js web application
-- **`mcp/`** - Model Context Protocol server
+## Layout
 
-## Development Commands
+- `apps/api` — the HTTP API. `/v1/memories`, `/v1/recall`, `/v1/ingest`,
+  `/v1/sessions/:id/subscribe` (SSE). Persistent mode adds `/v1/graph`,
+  `/v1/models`, `/v1/profile`, `/v1/dpdp`. Auth is a Bearer API key
+  (SHA-256 hashed in `api_keys`); sandbox mode uses one fixed key.
+- `apps/mcp` — MCP server (Cloudflare Durable Object) proxying to `/v1`.
+- `apps/edge-recall`, `apps/reranker-worker` — optional Cloudflare Workers.
+- `apps/site` — marketing site and docs (`apps/site/content/docs`).
+- `apps/starter-vapi`, `apps/voice-agent-livekit` — runnable voice demos.
+- `packages/core` — save/recall engine: sentence segmentation, kind
+  classification, slot-revision detection, 4-channel RRF recall (dense,
+  keyword, graph, temporal decay), bi-temporal validity, session event bus.
+- `packages/db` — Drizzle schema, SQL migrations, Postgres store, graph store.
+- `packages/language` — tokenization, script detection, self-correction,
+  Hinglish normalization, entity extraction.
+- `packages/voice` — ASR scrubber, hot cache, `StreamingSession`.
+- `packages/models` — reranker interface + heuristic/HTTP implementations.
+- `packages/adapter-*` — thin translations of the shared memory tool spec
+  into each LLM / agent / voice framework's native shape.
+- `packages/sdk-ts`, `packages/sdk-python` — clients for `/v1`.
+- `packages/*-python` — Python framework integrations built on `sdk-python`.
 
-### Root Level (Monorepo)
-- `bun run dev` - Start all applications in development mode
-- `bun run build` - Build all applications
-- `bun run check-types` - Run TypeScript checks across all apps
-- `bun run format-lint` - Format and lint code using Biome
+## Commands
 
-### Web Application (`apps/web/`)
-- `bun run dev` - Start Next.js development server
-- `bun run build` - Build Next.js application
-- `bun run lint` - Run Next.js linting
+- `bun run try` — sandbox API on :8787, key `sk_local_dev`, no DB needed.
+- `bun run test` — engine, API and MCP test suites.
+- `bun run check-types` — TypeScript checks.
+- `bun run format-lint` — Biome format + lint.
+- `bun run scripts/benchmark-voice-turns.ts` — voice-turn accuracy suite
+  against a running API.
+- `DATABASE_URL=... bun --filter @repo/db db:migrate` — apply migrations.
 
-## Architecture Overview
+## Conventions
 
-### Core Technology Stack
-- **Runtime**: Next.js (web)
-- **Framework**: Next.js (web)
-- **Language**: TypeScript throughout
-- **Package Manager**: Bun
-- **Monorepo**: Turbo
-- **Authentication**: Better Auth
-- **Monitoring**: Sentry
-
-### API Application (Primary Backend)
-The API serves as the core backend with these key features:
-
-**Key API Routes**
-- `/v3/documents` - CRUD operations for documents/memories
-- `/v3/search` - Semantic search across indexed content
-- `/v3/connections` - External service integrations (Google Drive, Notion, OneDrive)
-- `/v3/settings` - Organization and user settings
-- `/v3/analytics` - Usage analytics and reporting
-- `/api/auth/*` - Authentication endpoints
-
-### Web Application
-Next.js application providing user interface for:
-
-## Key Libraries & Dependencies
-
-### Shared Dependencies
-- `better-auth` - Authentication system with organization support
-- `drizzle-orm` - Database ORM
-- `zod` - Schema validation
-- `hono` - Web framework (API & MCP)
-- `@sentry/*` - Error monitoring
-- `turbo` - Monorepo build system
-
-### Web-Specific
-- `next` - React framework
-- `@radix-ui/*` - UI components
-- `@tanstack/react-query` - Data fetching
-- `recharts` - Analytics visualization
-
-## Development Workflow
-
-### Content Processing Pipeline
-All content goes through the `IngestContentWorkflow` which handles:
-- Content type detection and extraction
-- AI-powered summarization and automatic tagging
-- Vector embedding generation using Cloudflare AI
-- Chunking for semantic search optimization
-- Space relationship management
-
-### Environment Configuration
-- Uses `wrangler.jsonc` for Cloudflare Workers configuration
-- Supports staging and production environments
-- Requires Cloudflare bindings: Hyperdrive (DB), AI, KV storage, Workflows
-- Cron triggers every 4 hours for connection imports
-
-### Error Handling & Monitoring
-- HTTPException for consistent API error responses
-- Sentry integration with user and organization context
-- Custom logging that filters analytics noise
-
-## Code Quality & Standards
-
-### Linting & Formatting
-- **Biome** used for linting and formatting across the monorepo
-- Run `bun run format-lint` to format and lint all code
-- Configuration in `biome.json` at repository root
-
-### TypeScript
-- Strict TypeScript configuration with `@total-typescript/tsconfig`
-- Type checking with `bun run check-types`
-- Cloudflare Workers type generation with `cf-typegen`
-
-### Database Management
-- Drizzle ORM with schema located in shared packages
-- Database migrations handled through Drizzle Kit
-- Schema types automatically generated and shared
-
-## Security & Best Practices
-
-### Authentication
-- Better Auth handles user authentication and organization management
-- API key authentication for external access
-- Role-based access control within organizations
-
-### Data Handling
-- Content hashing to prevent duplicate processing
-- Secure handling of external service credentials
-- Automatic content type detection and validation
-
-### Deployment
-- Cloudflare Workers for scalable serverless deployment
-- Source map uploads to Sentry for production debugging
-- Environment-specific configuration management
+- Every write path goes through `apps/api/src/prepare.ts` so text and voice
+  store identical text for the same utterance.
+- Every store query is tenant-scoped; never add one that isn't.
+- Do not publish latency or accuracy numbers that are not reproducible from
+  a script in this repo (see `RESULTS.md`).

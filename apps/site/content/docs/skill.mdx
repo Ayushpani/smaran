@@ -1,51 +1,36 @@
 ---
 title: Claude Skill
-description: Drop-in memory for Claude projects — recall runs before every turn, save runs after.
+description: Teach Claude Code how to use the Smaran memory API in the agents you build.
 section: Integrations
 order: 2
 ---
 
-The Smaran Claude Skill wraps the SDK behind a slash-command interface. When installed on a Claude project, it hooks the turn lifecycle: **recall runs on user input**, **save runs on assistant response**.
+The Smaran skill is a single `SKILL.md` file that tells Claude Code how to call the Smaran API — save, recall, forget and voice ingest — when you ask it to add memory to an agent. It does not hook into Claude's own conversations or run anything on its own.
 
 ## Install
 
-From any Claude Code session:
-
-```
-/skill install smaran
-```
-
-Or add to your `.claude/skills/` directory manually:
+Copy the skill into your project:
 
 ```bash
 mkdir -p .claude/skills/smaran
-curl -sL https://smaran.dev/skill/SKILL.md > .claude/skills/smaran/SKILL.md
+cp path/to/smaran/skills/smaran/SKILL.md .claude/skills/smaran/SKILL.md
 ```
+
+Or into `~/.claude/skills/smaran/` to make it available in every project.
 
 ## Configure
 
-The skill reads an env var at load time:
+Point the code Claude writes at your API:
 
 ```bash
-export SMARAN_API_KEY="sk_..."
-# optional
-export SMARAN_SESSION_ID="claude_desktop_alice"
+export SMARAN_URL="http://localhost:8787"   # or your deployment
+export SMARAN_API_KEY="sk_local_dev"         # sandbox key from `bun run try`
 ```
 
-If no session ID is set, one is derived from the project path + git remote so different projects don't share memory.
+## What it covers
 
-## What it does automatically
-
-- **Before each user turn** — calls `recall` with the user's message as the query. Top 5 hits are prepended to the system prompt as `<recalled_memory>` context.
-- **After each assistant turn** — checks the assistant's response for candidate facts (things Claude asserted about the user, the project, or the world). Those get committed via `save`.
-- **Manual override** — the user can invoke `/smaran save "custom fact"` or `/smaran recall "query"` explicitly.
-
-## What it does NOT do
-
-- No cross-project memory by default. Each project boots its own session.
-- No silent PII scrubbing. If you want to redact before save, do it in a pre-hook.
-- No telemetry. Every call is direct SDK → Smaran API. Nothing goes to a third party.
-
-<Callout tone="warn" title="Turn latency budget">
-The pre-turn recall adds one round trip to every user message — targeted at &lt;3ms on the hosted API. If you notice slowdowns, disable auto-recall in the skill config and call recall manually only when useful.
-</Callout>
+- `POST /v1/memories` — save facts, with self-correction and question filtering.
+- `POST /v1/recall` — ranked recall, optional rerank and point-in-time `asOf`.
+- `DELETE /v1/memories/:id` — forget.
+- `POST /v1/ingest/partial` and `/commit` — streaming voice transcripts.
+- The recommended pattern: recall before each reply, save concise facts after.

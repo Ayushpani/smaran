@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="apps/web/public/logo.png" width="360" alt="Smaran" />
+  <img src=".github/assets/logo.png" width="360" alt="Smaran" />
 
   <h3>Voice-native memory infrastructure for AI agents</h3>
 

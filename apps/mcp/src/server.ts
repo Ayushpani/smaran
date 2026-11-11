@@ -17,7 +17,7 @@ type Props = {
 const memorySchema = z.object({
 	content: z
 		.string()
-		.max(200000, "Content exceeds maximum length of 200,000 characters")
+		.max(50_000, "Content exceeds the API's maximum of 50,000 characters")
 		.describe("The memory content to save or forget"),
 	action: z.enum(["save", "forget"]).optional().default("save"),
 	userId: z
@@ -47,7 +47,7 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 
 	server = new McpServer({
 		name: "smaran",
-		version: "4.0.0",
+		version: "0.1.0",
 	})
 
 	async init() {

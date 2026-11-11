@@ -1,5 +1,0 @@
-smaran
-openai
-anthropic
-httpx
-python-dotenv

@@ -8,7 +8,8 @@
 		"dev:app": "bun run --hot src/index.ts",
 		"dev:supabase": "bun --env-file=../../.env run --hot src/index.ts",
 		"start": "bun run src/index.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@hono/zod-validator": "^0.7.1",

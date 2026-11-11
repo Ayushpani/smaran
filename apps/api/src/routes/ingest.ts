@@ -4,6 +4,7 @@ import { isSubstantive, scrubAsrText } from "@repo/voice"
 import { Hono } from "hono"
 import { z } from "zod"
 import { auth } from "../auth.ts"
+import { prepareText } from "../prepare.ts"
 
 /**
  * Streaming-ingest endpoints for voice agents.
@@ -82,15 +83,23 @@ export function ingestRouter(core: MemoryCore) {
 					text: scrubbed.text,
 				})
 			}
+			const prepared = prepareText(scrubbed.text)
+			if (prepared.skip) {
+				return c.json({
+					saved: false,
+					reason: prepared.skip,
+					text: scrubbed.text,
+				})
+			}
 			const memories = await core.save({
 				tenantId,
 				userId: body.userId ?? null,
 				sessionId: body.sessionId,
-				text: scrubbed.text,
+				text: prepared.text,
 				source: body.source,
-				metadata: { fillersRemoved: scrubbed.removed },
+				metadata: { ...prepared.metadata, asrFillersRemoved: scrubbed.removed },
 			})
-			return c.json({ saved: true, memories, text: scrubbed.text })
+			return c.json({ saved: true, memories, text: prepared.text })
 		})
 		.get("/stats", (c) => c.json(buffers.stats()))
 }

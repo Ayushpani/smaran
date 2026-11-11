@@ -7,7 +7,8 @@
     "dev:local": "turbo run dev:app",
     "format-lint": "bunx biome check --write",
     "check-types": "turbo run check-types",
-    "try": "STORE=memory EMBEDDER=hash SANDBOX_API_KEY=sk_local_dev bun run apps/api/src/index.ts"
+    "try": "STORE=memory EMBEDDER=hash SANDBOX_API_KEY=sk_local_dev bun run apps/api/src/index.ts",
+    "test": "turbo run test --filter=@repo/core --filter=@repo/language --filter=@repo/voice --filter=@repo/api --filter=smaran-mcp"
   },
   "engines": {
     "node": ">=20"

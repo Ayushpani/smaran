@@ -24,5 +24,11 @@ jobs:
       - name: Run TypeScript type checking
         run: bunx turbo run check-types --filter='@smaranai/ai-sdk' --filter='@smaranai/memory-graph'
 
+      - name: Type-check the memory engine
+        run: bunx turbo run check-types --filter='@repo/core' --filter='@repo/db' --filter='@repo/api' --filter='@repo/language' --filter='@repo/voice' --filter='@repo/models'
+
+      - name: Run engine, API and MCP tests
+        run: bun run test
+
       - name: Run Biome CI (format & lint on changed files)
         run: bunx biome ci --changed --since=origin/main --no-errors-on-unmatched

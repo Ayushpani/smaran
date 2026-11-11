@@ -69,9 +69,14 @@ export class InMemoryStore implements MemoryStore {
 		return out
 	}
 
-	async deleteMemory(tenantId: string, id: string): Promise<void> {
+	async deleteMemory(
+		tenantId: string,
+		id: string,
+	): Promise<{ sessionId: string | null } | undefined> {
 		const row = this.rows.get(id)
-		if (row && row.tenantId === tenantId) this.rows.delete(id)
+		if (!row || row.tenantId !== tenantId) return undefined
+		this.rows.delete(id)
+		return { sessionId: row.sessionId }
 	}
 
 	async reviseMemory(

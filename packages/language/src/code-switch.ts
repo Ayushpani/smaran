@@ -198,7 +198,7 @@ export function normalizeCodeSwitched(text: string): NormalizeResult {
 			.replace(/\s{2,}/g, " ")
 			.trim(),
 		removed,
-		wasCodeSwitched: detection.codeSwitched,
-		primary: detection.primary,
+		wasCodeSwitched: codeSwitched,
+		primary,
 	}
 }

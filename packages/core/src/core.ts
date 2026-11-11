@@ -19,7 +19,11 @@ import type {
  */
 export interface MemoryStore {
 	insertMemories(rows: MemoryRow[]): Promise<Memory[]>
-	deleteMemory(tenantId: string, id: MemoryId): Promise<void>
+	/** Deletes a tenant's memory. Returns the deleted row's sessionId (null if it had none), or undefined if no such row existed for this tenant. */
+	deleteMemory(
+		tenantId: string,
+		id: MemoryId,
+	): Promise<{ sessionId: SessionId | null } | undefined>
 	/** Dense (vector similarity) channel. */
 	search(params: SearchParams): Promise<SearchRow[]>
 	/** Keyword (lexical/exact-token) channel — language-neutral tokenization at the store level. */
@@ -82,7 +86,8 @@ export interface MemoryCore {
 	save(input: SaveInput): Promise<Memory[]>
 	recall(query: RecallQuery): Promise<RecallResult>
 	forget(tenantId: string, id: MemoryId): Promise<void>
-	subscribe(sessionId: SessionId): AsyncIterable<MemoryEvent>
+	/** Events are scoped to (tenantId, sessionId) — a tenant can never observe another tenant's session, even with a colliding sessionId. */
+	subscribe(tenantId: string, sessionId: SessionId): AsyncIterable<MemoryEvent>
 }
 
 export interface CoreDeps {
@@ -138,6 +143,7 @@ export function createCore(deps: CoreDeps): MemoryCore {
 		// fact, not a batch.
 		if (input.revises && memories[0]) {
 			await store.reviseMemory(input.tenantId, input.revises, memories[0].id)
+			memories[0] = { ...memories[0], supersedesId: input.revises }
 		} else if (memories[0] && vecs[0]) {
 			// Auto-detect cross-session slot revision: if this new memory is
 			// near-duplicate (by embedding) of an existing CURRENT memory for
@@ -163,12 +169,14 @@ export function createCore(deps: CoreDeps): MemoryCore {
 					match.memory.id,
 					memories[0].id,
 				)
+				// Reflect the link in what we return — the inserted snapshot predates it.
+				memories[0] = { ...memories[0], supersedesId: match.memory.id }
 			}
 		}
 
 		const t = now().toISOString()
 		for (const m of memories) {
-			bus.publish(m.sessionId, {
+			bus.publish(input.tenantId, m.sessionId, {
 				type: "memory.saved",
 				memory: { ...m, createdAt: t, updatedAt: t },
 			})
@@ -269,26 +277,42 @@ export function createCore(deps: CoreDeps): MemoryCore {
 	}
 
 	async function forget(tenantId: string, id: MemoryId): Promise<void> {
-		await store.deleteMemory(tenantId, id)
-		bus.publish(null, { type: "memory.forgotten", id })
+		const deleted = await store.deleteMemory(tenantId, id)
+		if (deleted) {
+			bus.publish(tenantId, deleted.sessionId, { type: "memory.forgotten", id })
+		}
 	}
 
-	function subscribe(sessionId: SessionId): AsyncIterable<MemoryEvent> {
-		return bus.subscribe(sessionId)
+	function subscribe(
+		tenantId: string,
+		sessionId: SessionId,
+	): AsyncIterable<MemoryEvent> {
+		return bus.subscribe(tenantId, sessionId)
 	}
 
 	return { save, recall, forget, subscribe }
 }
 
+/**
+ * In-process pub/sub keyed by (tenant, session). Memories without a
+ * session have no subscribers. Single-process only: a multi-instance
+ * deployment needs a shared broker (e.g. Postgres LISTEN/NOTIFY or Redis)
+ * behind this same interface.
+ */
+const MAX_QUEUED_EVENTS = 1_000
+
 class SessionBus {
-	private listeners = new Map<string | null, Set<(e: MemoryEvent) => void>>()
-	publish(sessionId: string | null, event: MemoryEvent) {
-		for (const key of [sessionId, null]) {
-			const set = this.listeners.get(key)
-			if (set) for (const l of set) l(event)
-		}
+	private listeners = new Map<string, Set<(e: MemoryEvent) => void>>()
+	private static key(tenantId: string, sessionId: string): string {
+		return `${tenantId}\u0000${sessionId}`
 	}
-	subscribe(sessionId: string | null): AsyncIterable<MemoryEvent> {
+	publish(tenantId: string, sessionId: string | null, event: MemoryEvent) {
+		if (sessionId === null) return
+		const set = this.listeners.get(SessionBus.key(tenantId, sessionId))
+		if (set) for (const l of set) l(event)
+	}
+	subscribe(tenantId: string, sessionId: string): AsyncIterable<MemoryEvent> {
+		const key = SessionBus.key(tenantId, sessionId)
 		const queue: MemoryEvent[] = []
 		let resolveNext: ((v: IteratorResult<MemoryEvent>) => void) | null = null
 		const listener = (e: MemoryEvent) => {
@@ -296,16 +320,31 @@ class SessionBus {
 				const r = resolveNext
 				resolveNext = null
 				r({ value: e, done: false })
-			} else {
+			} else if (queue.length < MAX_QUEUED_EVENTS) {
 				queue.push(e)
 			}
 		}
-		let set = this.listeners.get(sessionId)
+		let set = this.listeners.get(key)
 		if (!set) {
 			set = new Set()
-			this.listeners.set(sessionId, set)
+			this.listeners.set(key, set)
 		}
 		set.add(listener)
+		let closed = false
+		const close = () => {
+			if (closed) return
+			closed = true
+			set?.delete(listener)
+			if (set?.size === 0) this.listeners.delete(key)
+			queue.length = 0
+			// Wake a consumer parked in next() so its for-await loop exits
+			// instead of holding the listener (and its connection) forever.
+			if (resolveNext) {
+				const r = resolveNext
+				resolveNext = null
+				r({ value: undefined, done: true })
+			}
+		}
 
 		return {
 			[Symbol.asyncIterator]: () => ({
@@ -316,13 +355,16 @@ class SessionBus {
 							done: false as const,
 						})
 					}
+					if (closed) {
+						return Promise.resolve({ value: undefined, done: true as const })
+					}
 					return new Promise<IteratorResult<MemoryEvent>>((res) => {
 						resolveNext = res
 					})
 				},
 				return: () => {
-					set?.delete(listener)
-					return Promise.resolve({ value: undefined, done: true })
+					close()
+					return Promise.resolve({ value: undefined, done: true as const })
 				},
 			}),
 		}

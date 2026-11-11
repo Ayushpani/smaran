@@ -5,11 +5,16 @@ import { auth } from "../auth.ts"
 
 export function sessionsRouter(core: MemoryCore) {
 	return new Hono().get("/:id/subscribe", (c) => {
-		auth(c)
+		const { tenantId } = auth(c)
 		const sessionId = c.req.param("id")
-		const events = core.subscribe(sessionId)
+		const events = core.subscribe(tenantId, sessionId)
+		const iterator = events[Symbol.asyncIterator]()
 		return streamSSE(c, async (stream) => {
-			for await (const event of events) {
+			// Client disconnect → close the subscription so the listener is freed.
+			stream.onAbort(() => {
+				void iterator.return?.()
+			})
+			for await (const event of { [Symbol.asyncIterator]: () => iterator }) {
 				await stream.writeSSE({
 					event: event.type,
 					data: JSON.stringify(event),

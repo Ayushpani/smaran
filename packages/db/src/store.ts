@@ -62,9 +62,11 @@ export function createSupabaseStore(db: Db): MemoryStore {
 		},
 
 		async deleteMemory(tenantId, id) {
-			await db
+			const [row] = await db
 				.delete(memories)
 				.where(and(eq(memories.tenantId, tenantId), eq(memories.id, id)))
+				.returning({ sessionId: memories.sessionId })
+			return row ? { sessionId: row.sessionId } : undefined
 		},
 
 		async reviseMemory(tenantId, oldId, newId) {

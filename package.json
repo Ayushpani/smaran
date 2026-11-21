@@ -8,7 +8,7 @@
     "format-lint": "bunx biome check --write",
     "check-types": "turbo run check-types",
     "try": "STORE=memory SANDBOX_API_KEY=sk_local_dev RATE_LIMIT_PER_MINUTE=1000000 bun run apps/api/src/index.ts",
-    "test": "turbo run test --filter=@repo/core --filter=@repo/db --filter=@repo/language --filter=@repo/voice --filter=@repo/models --filter=@repo/api --filter=smaran-mcp --filter=@smaranai/sdk-ts",
+    "test": "turbo run test --filter=@repo/core --filter=@repo/db --filter=@repo/language --filter=@repo/voice --filter=@repo/models --filter=@repo/api --filter=smaran-mcp --filter=@smaranai/sdk-ts --filter='@smaranai/adapter-*'",
     "keys": "bun run packages/db/src/keys.ts"
   },
   "engines": {

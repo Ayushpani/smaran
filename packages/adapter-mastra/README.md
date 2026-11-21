@@ -1,23 +1,24 @@
 # `@smaranai/adapter-mastra`
 
-Memory tools for [Mastra](https://mastra.ai). Two shapes: raw
-descriptors you wire into your own `createTool` call, or a pass-through
-builder that returns real `Tool` instances when you hand us Mastra's
-`createTool` + a Zod builder.
+Memory tools for [Mastra](https://mastra.ai), made with Mastra's own `createTool` and Zod schemas. Tested against `@mastra/core` 1.x, including a full `Agent.generate` tool loop.
 
 ```ts
-import { createTool } from "@mastra/core/tools"
-import { z } from "zod"
+import { Agent } from "@mastra/core/agent"
 import { Smaran } from "@smaranai/sdk-ts"
-import { buildMemoryTools } from "@smaranai/adapter-mastra"
+import { memoryTools } from "@smaranai/adapter-mastra"
 
-const memory = new Smaran({ apiKey: process.env.SMARAN_API_KEY! })
-const scope = { userId: "u_123", sessionId: "sess_abc" }
+const memory = new Smaran({
+	apiKey: process.env.SMARAN_API_KEY!,
+	baseUrl: process.env.SMARAN_URL,
+})
 
-const tools = buildMemoryTools(memory, scope, {
-	createTool,
-	zObject: (shape) => z.object(shape),
-	zString: () => z.string(),
-	zNumberOptional: () => z.number().optional(),
+const agent = new Agent({
+	id: "assistant",
+	name: "assistant",
+	instructions: "Save facts the user shares; recall before answering.",
+	model: "openai/gpt-4o-mini",
+	tools: memoryTools(memory, { userId: "u_123", sessionId: "sess_abc" }),
 })
 ```
+
+`@mastra/core` and `zod` are peer dependencies.

@@ -1,4 +1,5 @@
 import {
+	type MemoryToolParamType,
 	type AdapterScope,
 	type AutoRecallOptions,
 	buildRecalledContext,
@@ -16,7 +17,10 @@ export interface OpenAITool {
 		description: string
 		parameters: {
 			type: "object"
-			properties: Record<string, { type: string; description: string }>
+			properties: Record<
+				string,
+				{ type: MemoryToolParamType; description: string }
+			>
 			required: string[]
 		}
 	}
@@ -69,18 +73,22 @@ export async function handleToolCall(
 	return { role: "tool", tool_call_id: call.id, content: res.content }
 }
 
-export function isMemoryToolCall(call: {
-	function?: { name?: string }
-}): boolean {
-	const name = call.function?.name
-	return name === MEMORY_TOOL_NAMES.save || name === MEMORY_TOOL_NAMES.recall
+/** Type guard: narrows an SDK tool call to a memory function call handleToolCall accepts. */
+export function isMemoryToolCall<T extends { type?: string }>(
+	call: T,
+): call is T & OpenAIToolCall {
+	const fn = (call as { function?: { name?: string } }).function
+	const name = fn?.name
+	return (
+		call.type === "function" &&
+		(name === MEMORY_TOOL_NAMES.save || name === MEMORY_TOOL_NAMES.recall)
+	)
 }
 
-/** OpenAI Chat Completions message shape. */
+/** Minimal Chat Completions message shape; the SDK's ChatCompletionMessageParam satisfies it. */
 export interface OpenAIMessage {
-	role: "system" | "user" | "assistant" | "tool"
-	content: string | null
-	[k: string]: unknown
+	role: string
+	content?: unknown
 }
 
 /**
@@ -88,11 +96,11 @@ export interface OpenAIMessage {
  * the last user turn. Idempotent: if no memories match, returns the
  * original messages unchanged.
  */
-export async function withRecalledContext(
+export async function withRecalledContext<M extends OpenAIMessage>(
 	client: MemoryClient,
-	messages: OpenAIMessage[],
+	messages: M[],
 	opts: AutoRecallOptions = {},
-): Promise<OpenAIMessage[]> {
+): Promise<Array<M | { role: "system"; content: string }>> {
 	const last = [...messages].reverse().find((m) => m.role === "user")
 	const lastText = typeof last?.content === "string" ? last.content : ""
 	const recalled = await buildRecalledContext(client, lastText, opts)
@@ -100,7 +108,10 @@ export async function withRecalledContext(
 
 	const [head, ...rest] = messages
 	if (head?.role === "system" && typeof head.content === "string") {
-		return [{ ...head, content: `${head.content}\n\n${recalled}` }, ...rest]
+		return [
+			{ role: "system", content: `${head.content}\n\n${recalled}` },
+			...rest,
+		]
 	}
 	return [{ role: "system", content: recalled }, ...messages]
 }

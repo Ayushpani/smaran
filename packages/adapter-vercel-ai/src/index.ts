@@ -6,43 +6,33 @@ import {
 	memoryToolSpecs,
 } from "@repo/core"
 
+import { jsonSchema, type Tool, tool } from "ai"
+
 /**
- * Vercel AI SDK plugin. Two entry points:
- *   memoryTools(memory, scope) — returns a tools object you drop into
- *                                 `generateText`/`streamText`.
+ * Vercel AI SDK integration (AI SDK 5+; tested against 7). Two entry points:
+ *   memoryTools(memory, scope) — a tools object for `generateText` /
+ *                                 `streamText` / agents, built with the
+ *                                 SDK's own `tool()` + `jsonSchema()`.
  *   withRecalledContext(memory, messages, opts) — silent injection.
- * Structurally compatible with the AI SDK's tool definition shape:
- *   { description, parameters (JSON Schema), execute }.
  */
-
-export interface VercelToolDef {
-	description: string
-	parameters: {
-		type: "object"
-		properties: Record<string, { type: string; description: string }>
-		required: string[]
-	}
-	execute: (args: Record<string, unknown>) => Promise<string>
-}
-
 export function memoryTools(
 	client: MemoryClient,
 	scope: AdapterScope,
-): Record<string, VercelToolDef> {
-	const out: Record<string, VercelToolDef> = {}
+): Record<string, Tool<Record<string, unknown>, string>> {
+	const out: Record<string, Tool<Record<string, unknown>, string>> = {}
 	for (const spec of memoryToolSpecs) {
-		out[spec.name] = {
+		out[spec.name] = tool({
 			description: spec.description,
-			parameters: spec.parameters,
-			execute: async (args) => {
+			inputSchema: jsonSchema<Record<string, unknown>>(spec.parameters),
+			execute: async (input) => {
 				const res = await handleMemoryToolCall(
 					client,
-					{ name: spec.name, input: args },
+					{ name: spec.name, input },
 					scope,
 				)
 				return res.content
 			},
-		}
+		})
 	}
 	return out
 }

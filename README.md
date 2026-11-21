@@ -84,23 +84,23 @@ The API needs one env var (`DATABASE_URL`) — a Supabase free-tier Postgres wor
 
 ### LLM & agent-framework adapters
 
-| Package                                                     | Coverage                                                                                        |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [`@smaranai/adapter-anthropic`](packages/adapter-anthropic) | Anthropic Messages + Claude Agent SDK                                                           |
-| [`@smaranai/adapter-openai`](packages/adapter-openai)       | OpenAI Chat/Responses/Agents/Codex + Groq/Together/DeepSeek/xAI/Fireworks/Ollama/LM Studio/vLLM |
-| [`@smaranai/adapter-google`](packages/adapter-google)       | Google Gemini + Agent Kit                                                                       |
-| [`@smaranai/adapter-vercel-ai`](packages/adapter-vercel-ai) | Vercel AI SDK                                                                                   |
-| [`@smaranai/adapter-langgraph`](packages/adapter-langgraph) | LangGraph.js                                                                                    |
-| [`@smaranai/adapter-mastra`](packages/adapter-mastra)       | Mastra                                                                                          |
+| Package                                                     | Coverage                                                              |
+| ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| [`@smaranai/adapter-anthropic`](packages/adapter-anthropic) | Anthropic Messages API (tested: `@anthropic-ai/sdk` 1.x)              |
+| [`@smaranai/adapter-openai`](packages/adapter-openai)       | OpenAI Chat Completions + compatible endpoints (tested: `openai` 7.x) |
+| [`@smaranai/adapter-google`](packages/adapter-google)       | Google Gemini (tested: `@google/genai` 3.x)                           |
+| [`@smaranai/adapter-vercel-ai`](packages/adapter-vercel-ai) | Vercel AI SDK (tested: `ai` 7.x)                                      |
+| [`@smaranai/adapter-langgraph`](packages/adapter-langgraph) | LangGraph.js / LangChain.js (tested: `@langchain/core` 1.x)           |
+| [`@smaranai/adapter-mastra`](packages/adapter-mastra)       | Mastra (tested: `@mastra/core` 1.x)                                   |
 
-Every adapter exposes both **model-driven tools** (the model calls `memory_save` / `memory_recall` itself) and **silent context injection** (`withRecalledContext` prepends relevant memories to the system prompt). Compose both on the same call.
+Every adapter exposes **model-driven tools** (the model calls `memory_save` / `memory_recall` itself); all except Mastra also offer **silent context injection** (`withRecalledContext`). Each is tested against the real framework package, including a tool-call round trip.
 
 ### Voice-platform adapters
 
 | Package                                                 | Coverage                                          |
 | ------------------------------------------------------- | ------------------------------------------------- |
 | [`@smaranai/adapter-vapi`](packages/adapter-vapi)       | Vapi server-URL webhook (functions + transcripts) |
-| [`@smaranai/adapter-livekit`](packages/adapter-livekit) | LiveKit Agents (Pipecat by shape)                 |
+| [`@smaranai/adapter-livekit`](packages/adapter-livekit) | LiveKit Agents (Node)                             |
 
 ### Applications
 

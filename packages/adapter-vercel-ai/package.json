@@ -10,12 +10,18 @@
 		}
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit -p tsconfig.test.json",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@repo/core": "workspace:*"
 	},
 	"devDependencies": {
-		"typescript": "5.8.3"
+		"ai": "7.0.179",
+		"typescript": "5.8.3",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"ai": ">=5"
 	}
 }

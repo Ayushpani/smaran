@@ -3,6 +3,7 @@ import type { MemoryCore } from "@repo/core"
 import { isSubstantive, scrubAsrText } from "@repo/voice"
 import { Hono } from "hono"
 import { z } from "zod"
+import type { IngestBuffers } from "@repo/db"
 import { auth } from "../auth.ts"
 import { prepareText } from "../prepare.ts"
 
@@ -27,53 +28,53 @@ export const commitInput = z.object({
 	source: z.enum(["text", "voice"]).default("voice"),
 })
 
-interface Buffers {
-	get(key: string): string | undefined
-	append(key: string, text: string): string
-	take(key: string): string
-	stats(): { sessions: number }
-}
-
-function createBuffers(): Buffers {
+/** Single-process turn buffers (sandbox / single instance). Same merge rule as the Postgres store. */
+export function createMemoryIngestBuffers(): IngestBuffers {
 	const map = new Map<string, string>()
+	const k = (t: string, s: string) => `${t}\u0000${s}`
 	return {
-		get: (k) => map.get(k),
-		append(k, text) {
-			const prev = map.get(k) ?? ""
-			const next = text.startsWith(prev)
-				? text
-				: prev.endsWith(text)
-					? prev
-					: `${prev} ${text}`
-			map.set(k, next)
-			return next
+		async append(t, s, text) {
+			const prev = map.get(k(t, s)) ?? ""
+			const next =
+				!prev || text.startsWith(prev)
+					? text
+					: prev.endsWith(text)
+						? prev
+						: `${prev} ${text}`
+			map.set(k(t, s), next)
+			return next.length
 		},
-		take(k) {
-			const cur = map.get(k) ?? ""
-			map.delete(k)
+		async take(t, s) {
+			const cur = map.get(k(t, s)) ?? ""
+			map.delete(k(t, s))
 			return cur
 		},
-		stats: () => ({ sessions: map.size }),
+		async stats(t) {
+			let n = 0
+			for (const key of map.keys()) if (key.startsWith(`${t}\u0000`)) n++
+			return { sessions: n }
+		},
 	}
 }
 
-export function ingestRouter(core: MemoryCore) {
-	const buffers = createBuffers()
-	const key = (tenantId: string, sessionId: string) =>
-		`${tenantId}:${sessionId}`
-
+export function ingestRouter(
+	core: MemoryCore,
+	buffers: IngestBuffers = createMemoryIngestBuffers(),
+) {
 	return new Hono()
-		.post("/partial", validate("json", partialInput), (c) => {
+		.post("/partial", validate("json", partialInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { sessionId, text } = c.req.valid("json")
-			const merged = buffers.append(key(tenantId, sessionId), text)
-			return c.json({ sessionId, bufferLen: merged.length })
+			const bufferLen = await buffers.append(tenantId, sessionId, text)
+			return c.json({ sessionId, bufferLen })
 		})
 		.post("/commit", validate("json", commitInput), async (c) => {
 			const { tenantId } = auth(c)
 			const body = c.req.valid("json")
-			const bufKey = key(tenantId, body.sessionId)
-			const raw = (body.text ?? buffers.take(bufKey)).trim()
+			// Always clear the turn buffer, even when `text` is passed
+			// explicitly — otherwise stale partials leak into the next turn.
+			const buffered = await buffers.take(tenantId, body.sessionId)
+			const raw = (body.text ?? buffered).trim()
 			if (!raw) return c.json({ saved: false, reason: "empty" })
 			const scrubbed = scrubAsrText(raw)
 			if (!isSubstantive(scrubbed.text)) {
@@ -101,5 +102,5 @@ export function ingestRouter(core: MemoryCore) {
 			})
 			return c.json({ saved: true, memories, text: prepared.text })
 		})
-		.get("/stats", (c) => c.json(buffers.stats()))
+		.get("/stats", async (c) => c.json(await buffers.stats(auth(c).tenantId)))
 }

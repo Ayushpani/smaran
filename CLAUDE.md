@@ -22,7 +22,7 @@ Postgres + pgvector (`packages/db`).
 - `packages/core` — save/recall engine: sentence segmentation, kind
   classification, slot-revision detection, 4-channel RRF recall (dense,
   keyword, graph, temporal decay), bi-temporal validity, session event bus.
-- `packages/db` — Drizzle schema, SQL migrations, Postgres store, graph store.
+- `packages/db` — Drizzle schema, SQL migrations, Postgres store, graph store, shared multi-instance state (`shared-state.ts`: LISTEN/NOTIFY event bus, turn buffers, rate limits).
 - `packages/language` — tokenization, script detection, self-correction,
   Hinglish normalization, entity extraction.
 - `packages/voice` — ASR scrubber, hot cache, `StreamingSession`.

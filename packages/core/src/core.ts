@@ -8,6 +8,7 @@ import {
 import type { Embedder } from "./embedder.ts"
 import type { Consolidator } from "./consolidator.ts"
 import { classifyRevision, type RevisionKind } from "./revision.ts"
+import { createInProcessEventBus, type EventBus } from "./events.ts"
 import type {
 	Memory,
 	MemoryEvent,
@@ -113,6 +114,8 @@ export interface CoreDeps {
 	consolidator: Consolidator
 	/** Optional entity-graph channel for RRF fusion. Sandbox/in-memory mode omits it — dense+keyword still fuse. */
 	graph?: GraphChannel
+	/** Where memory events go. Defaults to in-process; use a shared bus (e.g. Postgres LISTEN/NOTIFY) when running several API instances. */
+	events?: EventBus
 	newId?: () => string
 	now?: () => Date
 }
@@ -135,7 +138,17 @@ export function createCore(deps: CoreDeps): MemoryCore {
 	const now = deps.now ?? (() => new Date())
 	const classifier: Classifier = createClassifier(embedder)
 
-	const bus = new SessionBus()
+	const bus: EventBus = deps.events ?? createInProcessEventBus()
+	// Events are best-effort: a broker hiccup must never fail or delay a save.
+	const emit = (
+		tenantId: string,
+		sessionId: string | null,
+		event: MemoryEvent,
+	) => {
+		void Promise.resolve()
+			.then(() => bus.publish(tenantId, sessionId, event))
+			.catch(() => {})
+	}
 
 	async function save(input: SaveInput): Promise<Memory[]> {
 		const candidates = await consolidator.consolidate(input)
@@ -237,7 +250,7 @@ export function createCore(deps: CoreDeps): MemoryCore {
 
 		const t = now().toISOString()
 		for (const m of inserted) {
-			bus.publish(input.tenantId, m.sessionId, {
+			emit(input.tenantId, m.sessionId, {
 				type: "memory.saved",
 				memory: { ...m, createdAt: t, updatedAt: t },
 			})
@@ -350,7 +363,7 @@ export function createCore(deps: CoreDeps): MemoryCore {
 	async function forget(tenantId: string, id: MemoryId): Promise<void> {
 		const deleted = await store.deleteMemory(tenantId, id)
 		if (deleted) {
-			bus.publish(tenantId, deleted.sessionId, { type: "memory.forgotten", id })
+			emit(tenantId, deleted.sessionId, { type: "memory.forgotten", id })
 		}
 	}
 
@@ -370,78 +383,6 @@ export function createCore(deps: CoreDeps): MemoryCore {
  * deployment needs a shared broker (e.g. Postgres LISTEN/NOTIFY or Redis)
  * behind this same interface.
  */
-const MAX_QUEUED_EVENTS = 1_000
-
-class SessionBus {
-	private listeners = new Map<string, Set<(e: MemoryEvent) => void>>()
-	private static key(tenantId: string, sessionId: string): string {
-		return `${tenantId}\u0000${sessionId}`
-	}
-	publish(tenantId: string, sessionId: string | null, event: MemoryEvent) {
-		if (sessionId === null) return
-		const set = this.listeners.get(SessionBus.key(tenantId, sessionId))
-		if (set) for (const l of set) l(event)
-	}
-	subscribe(tenantId: string, sessionId: string): AsyncIterable<MemoryEvent> {
-		const key = SessionBus.key(tenantId, sessionId)
-		const queue: MemoryEvent[] = []
-		let resolveNext: ((v: IteratorResult<MemoryEvent>) => void) | null = null
-		const listener = (e: MemoryEvent) => {
-			if (resolveNext) {
-				const r = resolveNext
-				resolveNext = null
-				r({ value: e, done: false })
-			} else if (queue.length < MAX_QUEUED_EVENTS) {
-				queue.push(e)
-			}
-		}
-		let set = this.listeners.get(key)
-		if (!set) {
-			set = new Set()
-			this.listeners.set(key, set)
-		}
-		set.add(listener)
-		let closed = false
-		const close = () => {
-			if (closed) return
-			closed = true
-			set?.delete(listener)
-			if (set?.size === 0) this.listeners.delete(key)
-			queue.length = 0
-			// Wake a consumer parked in next() so its for-await loop exits
-			// instead of holding the listener (and its connection) forever.
-			if (resolveNext) {
-				const r = resolveNext
-				resolveNext = null
-				r({ value: undefined, done: true })
-			}
-		}
-
-		return {
-			[Symbol.asyncIterator]: () => ({
-				next: () => {
-					if (queue.length > 0) {
-						return Promise.resolve({
-							value: queue.shift()!,
-							done: false as const,
-						})
-					}
-					if (closed) {
-						return Promise.resolve({ value: undefined, done: true as const })
-					}
-					return new Promise<IteratorResult<MemoryEvent>>((res) => {
-						resolveNext = res
-					})
-				},
-				return: () => {
-					close()
-					return Promise.resolve({ value: undefined, done: true as const })
-				},
-			}),
-		}
-	}
-}
-
 function cryptoId(): string {
 	const bytes = new Uint8Array(16)
 	crypto.getRandomValues(bytes)

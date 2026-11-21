@@ -1,6 +1,7 @@
 import { zValidator } from "@hono/zod-validator"
 import type { Context, MiddlewareHandler } from "hono"
 import { HTTPException } from "hono/http-exception"
+import type { RateLimitDecision, RateLimitStore } from "@repo/db"
 
 /**
  * Cross-cutting HTTP concerns: request IDs, structured access logs,
@@ -116,41 +117,63 @@ export function validationHook(
 }
 
 /**
- * Token-bucket rate limiter keyed by API key (falls back to client IP
- * before auth). In-process: correct for a single instance; a multi-
- * instance deployment needs a shared store behind the same interface.
+ * Per-key rate limiting over a pluggable store: in-process token bucket
+ * (default) or a shared store (Postgres) so every API instance enforces
+ * one limit. Fails open if the store errors — rate limiting must never
+ * take the API down.
  */
 export function rateLimit(opts: {
 	perMinute: number
 	key: (c: Context) => string
+	store?: RateLimitStore
 }): MiddlewareHandler {
-	const capacity = Math.max(1, opts.perMinute)
-	const refillPerMs = capacity / 60_000
-	const buckets = new Map<string, { tokens: number; at: number }>()
-	let lastSweep = Date.now()
-
+	const limit = Math.max(1, opts.perMinute)
+	const store = opts.store ?? createMemoryRateLimitStore()
 	return async (c, next) => {
-		const now = Date.now()
-		// Drop idle buckets so memory stays bounded by active keys.
-		if (now - lastSweep > 60_000) {
-			for (const [k, b] of buckets) if (now - b.at > 120_000) buckets.delete(k)
-			lastSweep = now
+		let decision: RateLimitDecision
+		try {
+			decision = await store.hit(opts.key(c), limit)
+		} catch {
+			await next()
+			return
 		}
-		const k = opts.key(c)
-		const b = buckets.get(k) ?? { tokens: capacity, at: now }
-		b.tokens = Math.min(capacity, b.tokens + (now - b.at) * refillPerMs)
-		b.at = now
-		buckets.set(k, b)
-		c.header("RateLimit-Limit", String(capacity))
-		if (b.tokens < 1) {
-			const retry = Math.ceil((1 - b.tokens) / refillPerMs / 1000)
-			c.header("Retry-After", String(retry))
-			c.header("RateLimit-Remaining", "0")
+		c.header("RateLimit-Limit", String(limit))
+		c.header("RateLimit-Remaining", String(decision.remaining))
+		if (!decision.allowed) {
+			c.header("Retry-After", String(decision.retryAfter))
 			return c.json(errorBody(c, "rate_limited", "rate limit exceeded"), 429)
 		}
-		b.tokens -= 1
-		c.header("RateLimit-Remaining", String(Math.floor(b.tokens)))
 		await next()
+	}
+}
+
+/** Single-process token bucket: smooth refill, memory bounded by active keys. */
+export function createMemoryRateLimitStore(): RateLimitStore {
+	const buckets = new Map<string, { tokens: number; at: number }>()
+	let lastSweep = Date.now()
+	return {
+		async hit(key, limit) {
+			const now = Date.now()
+			const refillPerMs = limit / 60_000
+			if (now - lastSweep > 60_000) {
+				for (const [k, b] of buckets)
+					if (now - b.at > 120_000) buckets.delete(k)
+				lastSweep = now
+			}
+			const b = buckets.get(key) ?? { tokens: limit, at: now }
+			b.tokens = Math.min(limit, b.tokens + (now - b.at) * refillPerMs)
+			b.at = now
+			buckets.set(key, b)
+			if (b.tokens < 1) {
+				return {
+					allowed: false,
+					remaining: 0,
+					retryAfter: Math.ceil((1 - b.tokens) / refillPerMs / 1000),
+				}
+			}
+			b.tokens -= 1
+			return { allowed: true, remaining: Math.floor(b.tokens), retryAfter: 0 }
+		},
 	}
 }
 

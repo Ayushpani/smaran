@@ -20,6 +20,12 @@ const schema = z
 		OPENAI_BASE_URL: z.string().optional(),
 		OPENAI_EMBED_MODEL: z.string().default("text-embedding-3-small"),
 		CORS_ORIGIN: z.string().default("*"),
+		// Where rate limits, voice turn buffers and live events live.
+		// "auto" = postgres when STORE=supabase (multi-instance safe), else memory.
+		SHARED_STATE: z.enum(["auto", "postgres", "memory"]).default("auto"),
+		// Direct (session-mode) connection for LISTEN/NOTIFY. Transaction
+		// poolers (Supabase :6543) don't support LISTEN. Defaults to DATABASE_URL.
+		EVENTS_DATABASE_URL: z.string().optional(),
 		// Requests per minute per API key (token bucket, per process).
 		RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(600),
 		MAX_BODY_BYTES: z.coerce

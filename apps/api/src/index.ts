@@ -11,8 +11,12 @@ import {
 import {
 	createDb,
 	createGraphStore,
+	createPgEventBus,
+	createPgIngestBuffers,
+	createPgRateLimitStore,
 	createSupabaseStore,
 	type Db,
+	type PgEventBus,
 } from "@repo/db"
 import { Hono } from "hono"
 import { bodyLimit } from "hono/body-limit"
@@ -21,6 +25,7 @@ import { sql } from "drizzle-orm"
 import { apiKeyAuth, sandboxAuth } from "./auth.ts"
 import { loadEnv } from "./env.ts"
 import {
+	createMemoryRateLimitStore,
 	errorBody,
 	notFound,
 	onError,
@@ -32,7 +37,7 @@ import { createModelResolver } from "./model-resolver.ts"
 import { buildOpenApi } from "./openapi.ts"
 import { dpdpRouter } from "./routes/dpdp.ts"
 import { graphRouter } from "./routes/graph.ts"
-import { ingestRouter } from "./routes/ingest.ts"
+import { createMemoryIngestBuffers, ingestRouter } from "./routes/ingest.ts"
 import { memoriesRouter } from "./routes/memories.ts"
 import { modelsRouter } from "./routes/models.ts"
 import { profileRouter } from "./routes/profile.ts"
@@ -99,6 +104,26 @@ if (env.RERANKER === "local") {
 	builtInReranker = ce
 }
 
+// Shared state: Postgres when several instances must act as one.
+const sharedPg =
+	env.SHARED_STATE === "postgres" || (env.SHARED_STATE === "auto" && !isSandbox)
+if (sharedPg && !db) {
+	throw new Error(
+		"SHARED_STATE=postgres requires STORE=supabase and DATABASE_URL",
+	)
+}
+let eventBus: PgEventBus | undefined
+if (sharedPg) {
+	eventBus = createPgEventBus(env.EVENTS_DATABASE_URL ?? env.DATABASE_URL!)
+	await eventBus.ready
+}
+const ingestBuffers = sharedPg
+	? createPgIngestBuffers(db!)
+	: createMemoryIngestBuffers()
+const rateLimitStore = sharedPg
+	? createPgRateLimitStore(db!)
+	: createMemoryRateLimitStore()
+
 const core = createCore({
 	store,
 	embedder,
@@ -106,6 +131,7 @@ const core = createCore({
 	// Sandbox mode has no Postgres, so no entity/relations tables — dense
 	// + keyword channels still fuse fine without the graph channel.
 	graph: isSandbox ? undefined : createGraphStore(db!),
+	events: eventBus,
 })
 
 const openapi = buildOpenApi({ persistent: !isSandbox })
@@ -156,6 +182,7 @@ export const app = new Hono()
 		"/v1/*",
 		rateLimit({
 			perMinute: env.RATE_LIMIT_PER_MINUTE,
+			store: rateLimitStore,
 			key: (c) =>
 				c.req.header("Authorization") ??
 				c.req.header("x-forwarded-for") ??
@@ -179,7 +206,7 @@ if (isSandbox) {
 			),
 		)
 		.route("/v1/sessions", sessionsRouter(core))
-		.route("/v1/ingest", ingestRouter(core))
+		.route("/v1/ingest", ingestRouter(core, ingestBuffers))
 } else {
 	const modelResolver = createModelResolver(db!, builtInReranker)
 	app
@@ -187,7 +214,7 @@ if (isSandbox) {
 		.route("/v1/memories", memoriesRouter(core))
 		.route("/v1/recall", recallRouter(core, modelResolver, env.RERANK_POOL))
 		.route("/v1/sessions", sessionsRouter(core))
-		.route("/v1/ingest", ingestRouter(core))
+		.route("/v1/ingest", ingestRouter(core, ingestBuffers))
 		.route("/v1/dpdp", dpdpRouter(db!))
 		.route("/v1/graph", graphRouter(db!))
 		.route("/v1/models", modelsRouter(db!, modelResolver))
@@ -228,6 +255,7 @@ if (import.meta.main) {
 	const shutdown = async (signal: string) => {
 		console.log(JSON.stringify({ level: "info", msg: "shutdown", signal }))
 		await server.stop()
+		await eventBus?.close()
 		const client = (
 			db as unknown as { $client?: { end(o?: object): Promise<void> } }
 		)?.$client

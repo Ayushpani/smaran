@@ -63,7 +63,9 @@ Only a SHA-256 hash of each key is stored.
 | `RERANKER` | `local` | `local` (free cross-encoder, English queries) or `none`. |
 | `RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | |
 | `RERANK_POOL` | `20` | Candidates the reranker re-orders. |
-| `RATE_LIMIT_PER_MINUTE` | `600` | Per API key, per process. |
+| `RATE_LIMIT_PER_MINUTE` | `600` | Per API key. Shared across instances in Postgres mode. |
+| `SHARED_STATE` | `auto` | Where rate limits, voice turn buffers and live events live: `postgres` (default with `STORE=supabase`) or `memory`. |
+| `EVENTS_DATABASE_URL` | `DATABASE_URL` | Direct (session-mode) connection for `LISTEN/NOTIFY`. Transaction poolers such as Supabase's port 6543 don't support `LISTEN` — use the direct URL. |
 | `MAX_BODY_BYTES` | `262144` | |
 | `CORS_ORIGIN` | `*` | |
 
@@ -75,7 +77,7 @@ Don't change the embedder on a database that already has memories — vectors fr
 - **Logs:** one JSON line per request with request id, path, status, latency and tenant. Request bodies, memory text and SQL parameters are never logged.
 - **Shutdown:** `SIGTERM` stops accepting connections, drains in-flight requests and closes the pool.
 - **Backups:** back up Postgres as usual; every table is primary data except the model cache.
-- **Scaling:** recall is an exact search within one user's memories, which stays fast for typical per-user volumes (thousands of memories). Rate limits, voice ingest buffers and live session events are per process — run one API instance, or put a shared store behind them before scaling out.
+- **Scaling:** run as many API instances as you like behind a load balancer. With `STORE=supabase`, rate limits, streaming-voice turn buffers and live session events are shared through Postgres (an unlogged counter table, an unlogged buffer table and `LISTEN/NOTIFY`), so instances behave as one — no Redis needed. Recall is an exact search within one user's memories, which stays fast for typical per-user volumes (thousands of memories).
 
 ## Optional Cloudflare workers
 

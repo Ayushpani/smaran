@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, test } from "bun:test"
 process.env.STORE = "memory"
 process.env.EMBEDDER = "hash"
 process.env.SANDBOX_API_KEY = "sk_test"
+process.env.RERANKER = "none"
 process.env.RATE_LIMIT_PER_MINUTE = "40"
 process.env.MAX_BODY_BYTES = "2048"
 

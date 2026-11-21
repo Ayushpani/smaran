@@ -55,7 +55,9 @@ const CONTENT_FLOOR = 3
  * Common romanized-Hindi tokens that Latin-only Unicode detection
  * cannot catch. Presence of any of these in an otherwise Latin
  * transcript flags the utterance as Hinglish. Deliberately narrow —
- * these are words with no common English collision. Phase 5 replaces
+ * these are words with no common English collision ("the", "main",
+ * "ho", "ya", "papa" and "pita" were removed: they made ~4% of plain
+ * English questions read as Hinglish). Phase 5 replaces
  * with a distilled classifier trained on real call data.
  */
 const HINGLISH_MARKERS = new Set([
@@ -63,8 +65,6 @@ const HINGLISH_MARKERS = new Set([
 	"hain",
 	"tha",
 	"thi",
-	"the",
-	"ho",
 	"hoga",
 	"hogi",
 	"kya",
@@ -95,14 +95,11 @@ const HINGLISH_MARKERS = new Set([
 	"humara",
 	"humari",
 	"tum",
-	"main",
 	"beti",
 	"beta",
 	"bhai",
 	"behen",
 	"maa",
-	"papa",
-	"pita",
 	"mata",
 	"pasand",
 	"acha",
@@ -116,7 +113,6 @@ const HINGLISH_MARKERS = new Set([
 	"lekin",
 	"magar",
 	"aur",
-	"ya",
 	"agar",
 	"toh",
 	"chahiye",

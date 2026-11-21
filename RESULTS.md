@@ -11,17 +11,34 @@ Every number quoted anywhere on the site, README or docs must resolve to a run i
 
 `scripts/benchmark-locomo.ts` saves every dialogue turn of the 10 LoCoMo conversations (5,882 turns) through `POST /v1/memories`, then asks every question through `POST /v1/recall` with `topK=10`. A question is a hit@k if one of its labelled evidence turns is in the top k; "full evidence" needs all of them. Category 5 (unanswerable by design) is excluded. This measures retrieval only, not end-to-end answer accuracy (that needs an LLM judge).
 
+**Default configuration** (local cross-encoder reranking on, `RERANKER=local`):
+
 | Category          | Questions | Hit@1     | Hit@5     | Hit@10    | Full evidence@10 | MRR@10    |
 | ----------------- | --------- | --------- | --------- | --------- | ---------------- | --------- |
-| multi-hop         | 282       | 26.6%     | 54.3%     | 64.5%     | 18.4%            | 0.387     |
-| temporal          | 321       | 48.9%     | 71.0%     | 76.9%     | 71.0%            | 0.586     |
-| open-domain       | 92        | 19.6%     | 37.0%     | 43.5%     | 26.1%            | 0.266     |
-| single-hop        | 841       | 39.7%     | 64.4%     | 74.4%     | 71.7%            | 0.504     |
-| **All (cat 1-4)** | **1536**  | **38.0%** | **62.3%** | **71.3%** | **59.0%**        | **0.485** |
+| multi-hop         | 282       | 41.1%     | 65.6%     | 72.0%     | 19.5%            | 0.522     |
+| temporal          | 321       | 58.3%     | 75.7%     | 79.4%     | 74.1%            | 0.653     |
+| open-domain       | 92        | 19.6%     | 40.2%     | 46.7%     | 29.3%            | 0.287     |
+| single-hop        | 841       | 54.0%     | 73.1%     | 76.7%     | 74.3%            | 0.622     |
+| **All (cat 1-4)** | **1536**  | **51.0%** | **70.3%** | **74.7%** | **61.6%**        | **0.593** |
 
-Save p50 12.9 ms / p95 24.9 ms (n=5882). Recall p50 14.8 ms / p95 22.3 ms (n=1536).
+Save p50 12.4 ms / p95 24.4 ms (n=5882). Recall p50 98 ms / p95 125 ms (n=1536), of which reranking is ~50–80 ms.
 
-**Same benchmark on Postgres** (`STORE=supabase`: local PostgreSQL 16 + pgvector 0.6 on the same machine, migrations 0000–0004): Hit@1 37.4%, Hit@5 62.2%, **Hit@10 71.5%**, full evidence 59.1%, MRR 0.481. **Save p50 22.9 ms / p95 37.8 ms; recall p50 29.9 ms / p95 42.6 ms.** Real deployments add the network round trip to the database.
+**Fast path** (`rerank: false` per request, or `RERANKER=none`): Hit@1 38.0%, Hit@5 62.3%, Hit@10 71.3%, full evidence 59.0%, MRR 0.485; recall p50 14.8 ms / p95 22.3 ms.
+
+**Reranker selection** (3 conversations, 383 questions, re-ordering the top 20 fused candidates):
+
+| Reranker (license)                                | Hit@1     | Hit@10    | MRR       | Added p50 |
+| ------------------------------------------------- | --------- | --------- | --------- | --------- |
+| none                                              | 36.3%     | 71.0%     | 0.468     | —         |
+| ms-marco-MiniLM-L-6-v2 (Apache-2.0) — **default** | **53.5%** | **78.1%** | **0.619** | ~60 ms    |
+| mmarco-mMiniLMv2-L12 multilingual (Apache-2.0)    | 51.7%     | 77.3%     | 0.606     | ~170 ms   |
+| bge-reranker-base (MIT), pool 30                  | 45.2%     | 73.9%     | 0.551     | ~500 ms   |
+| blending reranker order with fused order (w=0.3)  | 48.3%     | 77.5%     | 0.579     | ~60 ms    |
+| multilingual-e5-base embedder + MiniLM rerank     | 52.7%     | 79.9%     | 0.621     | ~60 ms    |
+
+The default cross-encoder is English-only. On a 26-question English/Hindi/Hinglish set, the fused ranking, the English reranker and the multilingual reranker all scored 20/26 at hit@1 — no gain — so reranking is applied only to English queries over mostly-English candidates; Hindi and Hinglish keep the fused order. Scoring candidates in length-sorted batches of 5 (instead of one padded batch) cut reranker p95 from 107 ms to 65 ms with identical output.
+
+**Same benchmark on Postgres** (`STORE=supabase`: local PostgreSQL 16 + pgvector 0.6 on the same machine, migrations 0000–0005), default configuration: Hit@1 50.5%, Hit@5 70.2%, **Hit@10 74.3%**, full evidence 61.1%, MRR 0.589. **Save p50 19.4 ms / p95 33.9 ms; recall p50 109 ms / p95 137 ms.** Fast path (no rerank): Hit@10 71.5%, recall p50 29.9 ms / p95 42.6 ms. Real deployments add the network round trip to the database.
 
 Postgres fixes behind those numbers (before → after, full run): keyword search OR-ed and IDF-weighted in a single lexeme join (it previously required every query word to match, and the first IDF version re-parsed queries per row); dense search made exact within the user's scope instead of HNSW post-filtering; the unused HNSW index dropped; recall no longer waits for its access-count write. Save p95 299 → 38 ms, recall p95 108 → 43 ms.
 
@@ -34,6 +51,7 @@ How the engine got here, each step measured on conversation 1 (150 questions, hi
 | Starting point: recency as an equal RRF vote, overlap keyword scoring, sentence splitting | 9.9%  | 45.4%  |
 | Recency demoted to a tie-breaker, IDF-weighted keyword scoring                            | 25.0% | 60.5%  |
 | Messages kept whole (only text > 500 chars is chunked)                                    | 31.6% | 68.4%  |
+| Local cross-encoder reranks the top 20 (English)                                          | 48.0% | 73.3%  |
 
 Reproduce (Postgres: set `STORE=supabase DATABASE_URL=…`, run `bun --filter @repo/db db:migrate` and `db:seed`, pass the seeded key as `SMARAN_API_KEY`):
 

@@ -58,7 +58,7 @@ Skipped questions return `{ "memories": [], "skipped": "question-or-tooshort" }`
 | `sessionId` | — | Marks hits from this session as `tier: "session"`. |
 | `topK` | `8` | 1–50. |
 | `includeCrossSession` | `true` | `false` restricts to `sessionId`. |
-| `rerank` | `false` | Re-order hits with the tenant's configured reranker. |
+| `rerank` | `true` | Re-order the top candidates with the reranker (built-in local cross-encoder for English, or the tenant's configured one). `false` = fastest path. |
 | `asOf` | now | ISO timestamp: what was true at that moment. |
 
 ```json
@@ -66,7 +66,8 @@ Skipped questions return `{ "memories": [], "skipped": "question-or-tooshort" }`
   "hits": [
     { "memory": { "id": "mem_…", "text": "my room number is 913", … }, "score": 0.0164, "tier": "cross", "channels": { "dense": 1, "keyword": 1 } }
   ],
-  "latencyMs": { "total": 15, "embed": 6, "search": 8, "rerank": 0 }
+  "latencyMs": { "total": 98, "embed": 6, "search": 12, "rerank": 80 },
+  "reranker": "Xenova/ms-marco-MiniLM-L-6-v2"
 }
 ```
 

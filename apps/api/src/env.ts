@@ -10,6 +10,12 @@ const schema = z
 		EMBEDDER: z.enum(["local", "openai", "hash"]).default("local"),
 		LOCAL_EMBED_MODEL: z.string().default("Xenova/multilingual-e5-small"),
 		MODEL_CACHE_DIR: z.string().default(".smaran/models"),
+		// "local" (default): free in-process cross-encoder reranks English
+		// recall (+17 pts hit@1 on LoCoMo, ~70 ms). "none": skip reranking.
+		RERANKER: z.enum(["local", "none"]).default("local"),
+		RERANK_MODEL: z.string().default("Xenova/ms-marco-MiniLM-L-6-v2"),
+		// Candidates the reranker re-orders (more = slower, little gain past 20).
+		RERANK_POOL: z.coerce.number().int().min(1).max(100).default(20),
 		OPENAI_API_KEY: z.string().optional(),
 		OPENAI_BASE_URL: z.string().optional(),
 		OPENAI_EMBED_MODEL: z.string().default("text-embedding-3-small"),

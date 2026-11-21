@@ -63,6 +63,7 @@ describe("against the real API (sandbox)", () => {
 		process.env.STORE = "memory"
 		process.env.EMBEDDER = "hash"
 		process.env.SANDBOX_API_KEY = "sk_sdk"
+		process.env.RERANKER = "none"
 		const { handler } = await import("../../../apps/api/src/index.ts")
 		const fetchFn = ((url: string, init?: RequestInit) =>
 			handler(new Request(url, init))) as unknown as typeof fetch

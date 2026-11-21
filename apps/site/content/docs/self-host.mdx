@@ -11,7 +11,7 @@ Smaran is one Bun process plus Postgres with `pgvector`. The embedding model run
 
 - PostgreSQL 15+ with the `pgvector` and `pg_trgm` extensions (Supabase, Neon, RDS, or your own server).
 - Bun `1.4.4+`, or Docker.
-- About 1 GB RAM for the API process (the model is ~120 MB on disk).
+- About 1 GB RAM for the API process (models: ~120 MB embedder + ~23 MB reranker on disk).
 
 ## Option A — Docker Compose
 
@@ -60,6 +60,9 @@ Only a SHA-256 hash of each key is stored.
 | `EMBEDDER` | `local` | `local` (free, in-process), `openai` (any `/v1/embeddings` host), `hash` (tests only). |
 | `LOCAL_EMBED_MODEL` | `Xenova/multilingual-e5-small` | |
 | `MODEL_CACHE_DIR` | `.smaran/models` | |
+| `RERANKER` | `local` | `local` (free cross-encoder, English queries) or `none`. |
+| `RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | |
+| `RERANK_POOL` | `20` | Candidates the reranker re-orders. |
 | `RATE_LIMIT_PER_MINUTE` | `600` | Per API key, per process. |
 | `MAX_BODY_BYTES` | `262144` | |
 | `CORS_ORIGIN` | `*` | |

@@ -27,6 +27,7 @@ import {
 	rateLimit,
 	requestContext,
 } from "./http.ts"
+import { createLocalCrossEncoder, type Reranker } from "@repo/models"
 import { createModelResolver } from "./model-resolver.ts"
 import { buildOpenApi } from "./openapi.ts"
 import { dpdpRouter } from "./routes/dpdp.ts"
@@ -82,6 +83,21 @@ if (env.EMBEDDER === "openai") {
 	embedder = new HashEmbedder()
 }
 const embedderName = env.EMBEDDER
+
+// Built-in reranker: a free local cross-encoder (default), or none.
+let builtInReranker: Reranker | null = null
+if (env.RERANKER === "local") {
+	const ce = createLocalCrossEncoder({
+		model: env.RERANK_MODEL,
+		cacheDir: env.MODEL_CACHE_DIR,
+	})
+	const t0 = performance.now()
+	await ce.warm()
+	console.log(
+		`reranker: ${ce.model} loaded in ${Math.round(performance.now() - t0)}ms`,
+	)
+	builtInReranker = ce
+}
 
 const core = createCore({
 	store,
@@ -154,15 +170,22 @@ if (isSandbox) {
 	app
 		.use("/v1/*", sandboxAuth(env.SANDBOX_API_KEY))
 		.route("/v1/memories", memoriesRouter(core))
-		.route("/v1/recall", recallRouter(core, createSandboxResolver()))
+		.route(
+			"/v1/recall",
+			recallRouter(
+				core,
+				createSandboxResolver(builtInReranker),
+				env.RERANK_POOL,
+			),
+		)
 		.route("/v1/sessions", sessionsRouter(core))
 		.route("/v1/ingest", ingestRouter(core))
 } else {
-	const modelResolver = createModelResolver(db!)
+	const modelResolver = createModelResolver(db!, builtInReranker)
 	app
 		.use("/v1/*", apiKeyAuth(db!))
 		.route("/v1/memories", memoriesRouter(core))
-		.route("/v1/recall", recallRouter(core, modelResolver))
+		.route("/v1/recall", recallRouter(core, modelResolver, env.RERANK_POOL))
 		.route("/v1/sessions", sessionsRouter(core))
 		.route("/v1/ingest", ingestRouter(core))
 		.route("/v1/dpdp", dpdpRouter(db!))
@@ -215,21 +238,14 @@ if (import.meta.main) {
 	process.on("SIGINT", () => void shutdown("SIGINT"))
 }
 
-/**
- * A no-op ModelResolver for sandbox mode. In persistent mode the real
- * resolver reads from the model_registry table; in sandbox we always
- * fall through to the built-in HeuristicReranker.
- */
-function createSandboxResolver() {
+/** Sandbox has no model registry: always the built-in reranker (or none). */
+function createSandboxResolver(reranker: Reranker | null) {
 	return {
-		resolve: async (tenantId: string) => {
-			const { HeuristicReranker } = await import("@repo/models")
-			return {
-				tenantId,
-				reranker: new HeuristicReranker(),
-				source: "builtin" as const,
-			}
-		},
+		resolve: async (tenantId: string) => ({
+			tenantId,
+			reranker,
+			source: "builtin" as const,
+		}),
 		resolveEmbedder: async (tenantId: string) => ({
 			tenantId,
 			embedder,

@@ -795,27 +795,27 @@ export default function Landing() {
 								<span>
 									smaran voice layer — full recall, reranked, injected
 								</span>
-								<span className="tot">15ms</span>
+								<span className="tot">100ms</span>
 							</div>
 							<div className="bz-track">
 								<div
 									className="bz-seg head"
 									style={{
-										width: "3.1%",
+										width: "20.8%",
 										minWidth: 8,
 										background: "var(--moss)",
 									}}
 								/>
 								<div className="room">
-									485ms of headroom → natural conversation
+									380ms of headroom → natural conversation
 								</div>
 								<div className="bz-mark">
 									<i />
 								</div>
 							</div>
 							<div className="bz-cap">
-								LoCoMo benchmark p50, RESULTS.md · free CPU embedder, no network
-								hop · micro-context &lt;150 tokens
+								LoCoMo benchmark p50 with reranking, RESULTS.md · free CPU
+								models, no network hop · micro-context &lt;150 tokens
 							</div>
 						</div>
 					</div>
@@ -879,7 +879,7 @@ export default function Landing() {
 						</div>
 						<div className="g">
 							<span className="k">Recall</span>
-							<span className="v vg">15ms</span>
+							<span className="v vg">100ms</span>
 						</div>
 					</div>
 					<div className="st-rail" id="stRail">
@@ -961,7 +961,7 @@ export default function Landing() {
 							<span className="num">02 / EDGE</span>
 							<div>
 								<h3>
-									~15ms <em>semantic recall.</em>
+									Reranked <em>semantic recall.</em>
 								</h3>
 								<p>
 									Meaning plus keyword search fused in one pass, on a free
@@ -1174,7 +1174,7 @@ export default function Landing() {
 								</div>
 								<div className="ac-met">
 									<span>Save 13ms</span>
-									<b>Recall 15ms</b>
+									<b>Recall 100ms</b>
 								</div>
 							</article>
 						))}

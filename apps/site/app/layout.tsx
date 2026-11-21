@@ -4,7 +4,7 @@ import "./globals.css"
 export const metadata: Metadata = {
 	title: "Smaran · स्मरण — memory for voice agents",
 	description:
-		"Voice-native memory layer for AI agents. Self-correcting, ~15ms semantic recall on CPU, Hindi + English out of the box.",
+		"Voice-native memory layer for AI agents. Self-correcting, reranked semantic recall on plain CPU, Hindi + English out of the box.",
 }
 
 export default function RootLayout({

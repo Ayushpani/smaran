@@ -96,3 +96,16 @@ test("an '. and …' clause adds a fact instead of correcting the previous one",
 	)
 	expect(r.text).toBe("my email is new@example.com, my extension is 42")
 })
+
+test("common English words don't make English read as Hinglish", () => {
+	for (const t of [
+		"Did Melanie make the black and white bowl in the photo?",
+		"What did the posters at the poetry reading say?",
+		"Is the main office open, ya think?",
+	]) {
+		expect(normalizeCodeSwitched(t).primary).toBe("en")
+	}
+	expect(normalizeCodeSwitched("mera ghar Andheri mein hai").primary).toBe(
+		"mixed",
+	)
+})

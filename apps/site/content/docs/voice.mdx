@@ -57,5 +57,5 @@ When a user restates a fact, Smaran corroborates the existing memory instead of 
 
 ## What the pipeline does not do
 
-- **No LLM in the write or recall path.** Cleaning and correction are deterministic; recall uses a small local embedding model plus keyword search. Typical recall is ~15 ms in-process on CPU (see RESULTS.md).
+- **No LLM in the write or recall path.** Cleaning and correction are deterministic; recall uses a small local embedding model plus keyword search, then a small local cross-encoder re-orders the top candidates. Recall is ~100 ms in-process on CPU, or ~15 ms with `rerank: false` (see RESULTS.md).
 - **No PII redaction on save.** Redact at your edge before calling `save` if you don't want certain identifiers stored.

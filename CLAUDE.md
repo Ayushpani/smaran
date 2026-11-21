@@ -26,7 +26,7 @@ Postgres + pgvector (`packages/db`).
 - `packages/language` — tokenization, script detection, self-correction,
   Hinglish normalization, entity extraction.
 - `packages/voice` — ASR scrubber, hot cache, `StreamingSession`.
-- `packages/models` — reranker interface + heuristic/HTTP implementations.
+- `packages/models` — reranker interface; local cross-encoder (default, English-gated via `shouldRerank`), HTTP and heuristic implementations.
 - `packages/adapter-*` — thin translations of the shared memory tool spec
   into each LLM / agent / voice framework's native shape.
 - `packages/sdk-ts`, `packages/sdk-python` — clients for `/v1`.

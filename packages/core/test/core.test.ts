@@ -34,17 +34,31 @@ async function drain(it: AsyncIterator<MemoryEvent>, ms = 20) {
 }
 
 describe("save / recall", () => {
-	test("splits sentences and recalls within tenant + user scope", async () => {
+	test("keeps a message whole and chunks only long text", async () => {
 		const { core } = makeCore()
-		const saved = await core.save({
+		const [one] = await core.save({
+			tenantId: "x",
+			text: "I live in Powai. My dog is Bruno.",
+		})
+		expect(one!.text).toBe("I live in Powai. My dog is Bruno.")
+		const long = Array.from(
+			{ length: 40 },
+			(_, i) => `Fact number ${i} is here.`,
+		).join(" ")
+		const chunks = await core.save({ tenantId: "x", text: long })
+		expect(chunks.length).toBeGreaterThan(1)
+		expect(chunks.every((c) => c.text.length <= 500)).toBe(true)
+		expect(chunks.map((c) => c.text).join(" ")).toBe(long)
+	})
+
+	test("recalls within tenant + user scope", async () => {
+		const { core } = makeCore()
+		await core.save({ tenantId: "t1", userId: "u1", text: "I live in Powai." })
+		await core.save({
 			tenantId: "t1",
 			userId: "u1",
-			text: "I live in Powai. My dog is called Bruno.",
+			text: "My dog is called Bruno.",
 		})
-		expect(saved.map((m) => m.text)).toEqual([
-			"I live in Powai.",
-			"My dog is called Bruno.",
-		])
 		const hits = await core.recall({
 			tenantId: "t1",
 			userId: "u1",
@@ -65,25 +79,87 @@ describe("save / recall", () => {
 		expect(otherUser.hits).toHaveLength(0)
 	})
 
-	test("an identical restatement supersedes the prior memory", async () => {
-		const { core } = makeCore()
+	test("restating a fact corroborates it instead of duplicating", async () => {
+		const { core, store } = makeCore()
 		const [first] = await core.save({
 			tenantId: "t",
 			userId: "u",
 			text: "I prefer tea.",
 		})
-		const [second] = await core.save({
+		const [again] = await core.save({
 			tenantId: "t",
 			userId: "u",
-			text: "I prefer tea.",
+			text: "i prefer tea",
 		})
-		expect(second!.supersedesId).toBe(first!.id)
+		expect(again!.id).toBe(first!.id)
+		expect(again!.confidenceAlpha).toBe(2)
+		expect(store.size()).toBe(1)
+	})
+
+	test("a changed value in the same frame replaces the old memory", async () => {
+		const { core } = makeCore()
+		const [old] = await core.save({
+			tenantId: "t",
+			userId: "u",
+			text: "My room number is 13.",
+		})
+		const [next] = await core.save({
+			tenantId: "t",
+			userId: "u",
+			text: "My room number is 913.",
+		})
+		expect(next!.supersedesId).toBe(old!.id)
 		const { hits } = await core.recall({
 			tenantId: "t",
 			userId: "u",
-			query: "tea",
+			query: "room number",
 		})
-		expect(hits.map((h) => h.memory.id)).toEqual([second!.id])
+		expect(hits.map((h) => h.memory.text)).toEqual(["My room number is 913."])
+	})
+
+	test("a related but different fact never hides the old one", async () => {
+		const { core } = makeCore()
+		await core.save({
+			tenantId: "t",
+			userId: "u",
+			text: "I am allergic to peanuts.",
+		})
+		const [next] = await core.save({
+			tenantId: "t",
+			userId: "u",
+			text: "I am allergic to penicillin.",
+		})
+		expect(next!.supersedesId).not.toBeNull()
+		const { hits } = await core.recall({
+			tenantId: "t",
+			userId: "u",
+			query: "allergic",
+		})
+		const texts = hits.map((h) => h.memory.text)
+		expect(texts).toContain("I am allergic to peanuts.")
+		expect(texts).toContain("I am allergic to penicillin.")
+		const old = hits.find((h) => h.memory.text.includes("peanuts"))!
+		expect(old.memory.confidenceBeta).toBe(2)
+	})
+
+	test("revision never crosses users, including the null user", async () => {
+		const { core } = makeCore()
+		await core.save({
+			tenantId: "t",
+			userId: "alice",
+			text: "My room number is 13.",
+		})
+		const [mine] = await core.save({
+			tenantId: "t",
+			text: "My room number is 913.",
+		})
+		expect(mine!.supersedesId).toBeNull()
+		const { hits } = await core.recall({
+			tenantId: "t",
+			userId: "alice",
+			query: "room number",
+		})
+		expect(hits.map((h) => h.memory.text)).toEqual(["My room number is 13."])
 	})
 
 	test("explicit revises closes the old fact; asOf still sees it", async () => {

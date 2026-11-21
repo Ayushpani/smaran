@@ -69,17 +69,37 @@ export function createSupabaseStore(db: Db): MemoryStore {
 			return row ? { sessionId: row.sessionId } : undefined
 		},
 
-		async reviseMemory(tenantId, oldId, newId) {
+		async reviseMemory(tenantId, oldId, newId, opts = {}) {
 			await db.transaction(async (tx) => {
-				await tx
-					.update(memories)
-					.set({ validUntil: sql`now()`, updatedAt: sql`now()` })
+				// Only link to a prior memory that belongs to this tenant.
+				const [prior] = await tx
+					.select({ id: memories.id })
+					.from(memories)
 					.where(and(eq(memories.tenantId, tenantId), eq(memories.id, oldId)))
+					.limit(1)
+				if (!prior) return
+				if (opts.closeOld ?? true) {
+					await tx
+						.update(memories)
+						.set({ validUntil: sql`now()`, updatedAt: sql`now()` })
+						.where(and(eq(memories.tenantId, tenantId), eq(memories.id, oldId)))
+				}
 				await tx
 					.update(memories)
 					.set({ supersedesId: oldId })
 					.where(and(eq(memories.tenantId, tenantId), eq(memories.id, newId)))
 			})
+		},
+
+		async adjustBelief(tenantId, id, delta) {
+			await db
+				.update(memories)
+				.set({
+					confidenceAlpha: sql`${memories.confidenceAlpha} + ${delta.alpha ?? 0}`,
+					confidenceBeta: sql`${memories.confidenceBeta} + ${delta.beta ?? 0}`,
+					updatedAt: sql`now()`,
+				})
+				.where(and(eq(memories.tenantId, tenantId), eq(memories.id, id)))
 		},
 
 		async touchAccess(tenantId, ids) {

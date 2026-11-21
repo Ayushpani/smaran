@@ -5,7 +5,11 @@ const schema = z
 		STORE: z.enum(["supabase", "memory"]).default("supabase"),
 		DATABASE_URL: z.string().optional(),
 		PORT: z.coerce.number().default(8787),
-		EMBEDDER: z.enum(["hash", "openai"]).default("hash"),
+		// "local" (default): free in-process multilingual model, no API key.
+		// "openai": any /v1/embeddings-compatible host. "hash": test stub only.
+		EMBEDDER: z.enum(["local", "openai", "hash"]).default("local"),
+		LOCAL_EMBED_MODEL: z.string().default("Xenova/multilingual-e5-small"),
+		MODEL_CACHE_DIR: z.string().default(".smaran/models"),
 		OPENAI_API_KEY: z.string().optional(),
 		OPENAI_BASE_URL: z.string().optional(),
 		OPENAI_EMBED_MODEL: z.string().default("text-embedding-3-small"),

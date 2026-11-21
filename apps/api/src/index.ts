@@ -1,5 +1,6 @@
 import {
 	createCore,
+	createLocalEmbedder,
 	createOpenAIEmbedder,
 	HashEmbedder,
 	HeuristicConsolidator,
@@ -56,10 +57,22 @@ if (env.EMBEDDER === "openai") {
 		model: env.OPENAI_EMBED_MODEL,
 		baseUrl: env.OPENAI_BASE_URL,
 	})
+} else if (env.EMBEDDER === "local") {
+	const local = createLocalEmbedder({
+		model: env.LOCAL_EMBED_MODEL,
+		cacheDir: env.MODEL_CACHE_DIR,
+	})
+	// Load at boot (first run downloads ~120 MB) so no request pays for it.
+	const t0 = performance.now()
+	await local.warm()
+	console.log(
+		`embedder: ${local.model} loaded in ${Math.round(performance.now() - t0)}ms`,
+	)
+	embedder = local
 } else {
 	embedder = new HashEmbedder()
 }
-const embedderName: "hash" | "openai" = env.EMBEDDER
+const embedderName = env.EMBEDDER
 
 const core = createCore({
 	store,

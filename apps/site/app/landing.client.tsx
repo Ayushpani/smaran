@@ -793,27 +793,27 @@ export default function Landing() {
 								<span>
 									smaran voice layer — full recall, reranked, injected
 								</span>
-								<span className="tot">2.6ms</span>
+								<span className="tot">15ms</span>
 							</div>
 							<div className="bz-track">
 								<div
 									className="bz-seg head"
 									style={{
-										width: "2.2%",
+										width: "3.1%",
 										minWidth: 8,
 										background: "var(--moss)",
 									}}
 								/>
 								<div className="room">
-									497ms of headroom → natural conversation
+									485ms of headroom → natural conversation
 								</div>
 								<div className="bz-mark">
 									<i />
 								</div>
 							</div>
 							<div className="bz-cap">
-								sandbox benchmark, RESULTS.md · hot cache, reranked ·
-								micro-context &lt;150 tokens
+								LoCoMo benchmark p50, RESULTS.md · free CPU embedder, no network
+								hop · micro-context &lt;150 tokens
 							</div>
 						</div>
 					</div>
@@ -873,11 +873,11 @@ export default function Landing() {
 						</div>
 						<div className="g">
 							<span className="k">Save</span>
-							<span className="v">10.7ms</span>
+							<span className="v">13ms</span>
 						</div>
 						<div className="g">
 							<span className="k">Recall</span>
-							<span className="v vg">2.6ms</span>
+							<span className="v vg">15ms</span>
 						</div>
 					</div>
 					<div className="st-rail" id="stRail">
@@ -959,12 +959,13 @@ export default function Landing() {
 							<span className="num">02 / EDGE</span>
 							<div>
 								<h3>
-									Sub-3ms <em>hot recall.</em>
+									~15ms <em>semantic recall.</em>
 								</h3>
 								<p>
-									An in-process cache in front of a Cloudflare cross-encoder
-									reranker. Numbers are from the sandbox benchmark in
-									RESULTS.md — reproducible, not a datasheet promise.
+									Meaning plus keyword search fused in one pass, on a free
+									multilingual model running on plain CPU. p50 from the public
+									LoCoMo benchmark in RESULTS.md — reproducible, not a datasheet
+									promise.
 								</p>
 							</div>
 							<span className="spec">
@@ -1170,8 +1171,8 @@ export default function Landing() {
 									<div className="ac-add">+ {s.add}</div>
 								</div>
 								<div className="ac-met">
-									<span>Save 10.7ms</span>
-									<b>Recall 2.6ms</b>
+									<span>Save 13ms</span>
+									<b>Recall 15ms</b>
 								</div>
 							</article>
 						))}
@@ -1236,7 +1237,7 @@ import { createMemoryClient } from "@smaranai/sdk-ts";
 const memory = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY });
 const adapter = new LiveKitMemoryAdapter(memory, { sessionId, userId });
 
-// Intercept speaker turns — <3ms micro-context injection
+// Intercept speaker turns — inject recalled context before the LLM turn
 agent.on("user_speech_committed", async (turn) => {
   const ctx = await adapter.onUserSpeech(turn.text);
   agent.setContextPrefix(ctx);

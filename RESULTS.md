@@ -1,8 +1,54 @@
-# Smaran — measured latency
+# Smaran — measured results
 
-Every latency figure quoted anywhere on the site (landing, docs, README) resolves to a run in this file. If it isn't here, it isn't real.
+Every number quoted anywhere on the site, README or docs must resolve to a run in this file, reproducible from a script in this repo. If it isn't here, it isn't real.
 
-## Methodology
+## Current engine
+
+**Hardware:** 4 vCPU Intel Xeon @ 2.10GHz, 15 GB RAM, no GPU, single process, API and client on the same machine (no network hop).
+**Config:** `STORE=memory`, `EMBEDDER=local` (Xenova/multilingual-e5-small, q8, CPU) unless noted.
+
+### LoCoMo retrieval (public long-term memory benchmark)
+
+`scripts/benchmark-locomo.ts` saves every dialogue turn of the 10 LoCoMo conversations (5,882 turns) through `POST /v1/memories`, then asks every question through `POST /v1/recall` with `topK=10`. A question is a hit@k if one of its labelled evidence turns is in the top k; "full evidence" needs all of them. Category 5 (unanswerable by design) is excluded. This measures retrieval only, not end-to-end answer accuracy (that needs an LLM judge).
+
+| Category          | Questions | Hit@1     | Hit@5     | Hit@10    | Full evidence@10 | MRR@10    |
+| ----------------- | --------- | --------- | --------- | --------- | ---------------- | --------- |
+| multi-hop         | 282       | 26.6%     | 54.3%     | 64.5%     | 18.4%            | 0.387     |
+| temporal          | 321       | 48.9%     | 71.0%     | 76.9%     | 71.0%            | 0.586     |
+| open-domain       | 92        | 19.6%     | 37.0%     | 43.5%     | 26.1%            | 0.266     |
+| single-hop        | 841       | 39.7%     | 64.4%     | 74.4%     | 71.7%            | 0.504     |
+| **All (cat 1-4)** | **1536**  | **38.0%** | **62.3%** | **71.3%** | **59.0%**        | **0.485** |
+
+Save p50 12.9 ms / p95 24.9 ms (n=5882). Recall p50 14.8 ms / p95 22.3 ms (n=1536).
+
+Same run with `EMBEDDER=hash` (no semantic model, keyword channel only effectively): Hit@1 4.6%, Hit@10 52.3%, MRR 0.178.
+
+How the engine got here, each step measured on conversation 1 (150 questions, hit@1 / hit@10):
+
+| Change                                                                                    | Hit@1 | Hit@10 |
+| ----------------------------------------------------------------------------------------- | ----- | ------ |
+| Starting point: recency as an equal RRF vote, overlap keyword scoring, sentence splitting | 9.9%  | 45.4%  |
+| Recency demoted to a tie-breaker, IDF-weighted keyword scoring                            | 25.0% | 60.5%  |
+| Messages kept whole (only text > 500 chars is chunked)                                    | 31.6% | 68.4%  |
+
+Reproduce:
+
+```bash
+bun run try                              # terminal 1 (fresh process — no prior data)
+bun run scripts/benchmark-locomo.ts      # terminal 2
+```
+
+### Voice-turn suite
+
+`scripts/benchmark-voice-turns.ts`, 7 cases (self-correction, Hinglish, confirmation questions, refinement across turns): **7/7**. Save p50 5.2 ms, recall p50 4.0 ms.
+
+---
+
+## Historical runs (previous engine — do not quote)
+
+The runs below predate the current engine (recall fusion, keyword scoring, chunking and the embedder all changed). The audio suite's `scripts/audio-samples/` was never committed, so those runs can't be reproduced from this repo.
+
+### Historical methodology
 
 Two suites already in the repo:
 
@@ -11,12 +57,12 @@ Two suites already in the repo:
 
 Each is run against four **config combinations** so the numbers can be attributed to the right layer:
 
-| Run | Store | Embedder | Purpose |
-|---|---|---|---|
-| A | `memory` | `hash` | sandbox baseline — isolates pipeline overhead |
-| B | `memory` | `openai:text-embedding-3-small` | isolates embedder network cost |
-| C | `supabase` | `hash` | isolates DB round-trip cost |
-| D | `supabase` | `openai:text-embedding-3-small` | **production shape — the one that matters** |
+| Run | Store      | Embedder                        | Purpose                                       |
+| --- | ---------- | ------------------------------- | --------------------------------------------- |
+| A   | `memory`   | `hash`                          | sandbox baseline — isolates pipeline overhead |
+| B   | `memory`   | `openai:text-embedding-3-small` | isolates embedder network cost                |
+| C   | `supabase` | `hash`                          | isolates DB round-trip cost                   |
+| D   | `supabase` | `openai:text-embedding-3-small` | **production shape — the one that matters**   |
 
 Reproduce locally:
 
@@ -38,7 +84,7 @@ bun run scripts/benchmark-audio.ts scripts/audio-samples
 
 ---
 
-## Run A — sandbox baseline
+### Run A — sandbox baseline
 
 - **Store**: `memory` (InMemoryStore, ephemeral)
 - **Embedder**: `hash` (HashEmbedder — deterministic, 0ms compute)
@@ -75,7 +121,7 @@ from the original Run A and predate the RRF/bi-temporal work. Flagged
 
 ---
 
-## Run B — embedder isolation
+### Run B — embedder isolation
 
 - **Store**: `memory`
 - **Embedder**: `openai:text-embedding-3-small`
@@ -99,7 +145,7 @@ Same asr numbers as Run A (ASR is upstream).
 
 ---
 
-## Run C — DB isolation
+### Run C — DB isolation
 
 - **Store**: `supabase` (Postgres + pgvector, HNSW index)
 - **Embedder**: `hash`
@@ -155,7 +201,7 @@ deployment mistake, not a Smaran number.
 
 ---
 
-## Run D — production shape (the one that matters)
+### Run D — production shape (the one that matters)
 
 - **Store**: `supabase`
 - **Embedder**: `openai:text-embedding-3-small`
@@ -177,7 +223,7 @@ deployment mistake, not a Smaran number.
 
 ---
 
-## Interpreting the audio accuracy numbers
+### Interpreting the audio accuracy numbers
 
 The audio suite's accuracy is dominated by ASR quality, not memory-layer accuracy. Whisper-tiny mishears `987654321` as `9-8-7-6-5-4-3-2-1`, `Ayushpani` as `Aayush Pani`, `bandra` as `Bhandra`. Smaran saves what it's given; the memory layer's job is to preserve and retrieve that value, not to correct ASR. Every "fail" in the audio suite is an ASR miss, not a Smaran failure.
 

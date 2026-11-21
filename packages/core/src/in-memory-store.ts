@@ -83,14 +83,30 @@ export class InMemoryStore implements MemoryStore {
 		tenantId: string,
 		oldId: string,
 		newId: string,
+		opts: { closeOld?: boolean } = {},
 	): Promise<void> {
 		const old = this.rows.get(oldId)
 		const next = this.rows.get(newId)
 		if (!old || old.tenantId !== tenantId) return
+		if (!next || next.tenantId !== tenantId) return
 		const now = new Date().toISOString()
-		old.validUntil = now
-		old.updatedAt = now
-		if (next) next.supersedesId = oldId
+		if (opts.closeOld ?? true) {
+			old.validUntil = now
+			old.updatedAt = now
+		}
+		next.supersedesId = oldId
+	}
+
+	async adjustBelief(
+		tenantId: string,
+		id: string,
+		delta: { alpha?: number; beta?: number },
+	): Promise<void> {
+		const row = this.rows.get(id)
+		if (!row || row.tenantId !== tenantId) return
+		row.confidenceAlpha += delta.alpha ?? 0
+		row.confidenceBeta += delta.beta ?? 0
+		row.updatedAt = new Date().toISOString()
 	}
 
 	async touchAccess(tenantId: string, ids: string[]): Promise<void> {
@@ -119,21 +135,38 @@ export class InMemoryStore implements MemoryStore {
 		}))
 	}
 
-	/** Naive tokenized-overlap keyword scoring — sandbox stand-in for Postgres tsvector/GIN. */
+	/**
+	 * Keyword channel: IDF-weighted term matching over the caller's scoped
+	 * memories. score(d) = Σ idf(t) for each distinct query token t in d,
+	 * with BM25's idf = ln(1 + (N − df + 0.5) / (df + 0.5)). Rare tokens
+	 * ("pottery") dominate, tokens present in nearly every memory (a
+	 * speaker's name, "the", "hai") contribute ~0 — with no per-language
+	 * stopword list. Mirrors the Postgres store's scoring.
+	 */
 	async searchKeyword(params: KeywordSearchParams): Promise<SearchRow[]> {
 		const qTokens = new Set(tokenize(params.queryText))
 		if (qTokens.size === 0) return []
-		const scored: Array<{ row: Row; overlap: number }> = []
-		for (const row of this.matching(params)) {
-			const docTokens = new Set(tokenize(row.text))
-			let overlap = 0
-			for (const t of qTokens) if (docTokens.has(t)) overlap++
-			if (overlap > 0) scored.push({ row, overlap })
+		const docs = Array.from(this.matching(params), (row) => ({
+			row,
+			tokens: new Set(tokenize(row.text)),
+		}))
+		const n = docs.length
+		const idf = new Map<string, number>()
+		for (const t of qTokens) {
+			let df = 0
+			for (const d of docs) if (d.tokens.has(t)) df++
+			if (df > 0) idf.set(t, Math.log(1 + (n - df + 0.5) / (df + 0.5)))
 		}
-		scored.sort((a, b) => b.overlap - a.overlap)
-		return scored.slice(0, params.topK).map(({ row, overlap }) => ({
+		const scored: Array<{ row: Row; score: number }> = []
+		for (const d of docs) {
+			let score = 0
+			for (const [t, w] of idf) if (d.tokens.has(t)) score += w
+			if (score > 0) scored.push({ row: d.row, score })
+		}
+		scored.sort((a, b) => b.score - a.score)
+		return scored.slice(0, params.topK).map(({ row, score }) => ({
 			memory: this.toMemory(row),
-			distance: 1 - overlap / qTokens.size,
+			distance: 1 / (1 + score),
 			sessionMatch: row.sessionId === params.sessionId,
 		}))
 	}

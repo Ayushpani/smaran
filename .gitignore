@@ -69,3 +69,6 @@ bun-debug.log*
 .DS_Store
 *.pem
 Thumbs.db
+
+# Local embedding model cache
+.smaran/

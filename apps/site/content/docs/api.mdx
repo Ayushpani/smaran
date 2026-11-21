@@ -1,201 +1,126 @@
 ---
 title: REST API
-description: One endpoint per operation. Bring your key, get your memory.
+description: Plain HTTPS + JSON from any language, with an OpenAPI spec for generated clients.
 section: SDK
 order: 2
 ---
 
-The REST API is the wire format the TypeScript SDK speaks. Use it directly from any language that can make HTTPS requests — Python, Rust, Go, or a bash script.
+Everything the SDKs do is plain HTTPS + JSON, so any language works. The full machine-readable description is served at **`GET /openapi.json`** (OpenAPI 3.1, no auth) — generate a typed client for Go, Java, Python, Ruby, PHP, C#, Swift and more:
 
-## Base URL
+```bash
+npx @openapitools/openapi-generator-cli generate \
+  -i http://localhost:8787/openapi.json -g go -o ./smaran-go
+```
 
-- **Sandbox** — `http://localhost:8787` (started with `bun run try`)
-- **Hosted** — `https://api.smaran.dev` (coming soon; use self-host in the meantime)
+## Authentication
 
-Every request must include an `Authorization: Bearer <api-key>` header. The sandbox accepts `sk_local_dev`; the hosted API uses tenant-scoped keys.
+Send `Authorization: Bearer <api key>` on every `/v1` request. The local sandbox accepts `sk_local_dev`; a Postgres deployment issues per-tenant keys with `bun run keys` (see [Self-host](/docs/self-host)). Every query is scoped to the key's tenant.
 
 ## POST /v1/memories
 
-One-shot save. Runs the full normalizer + self-correction pipeline and commits.
-
-**Request**
+Save a memory. The text is self-corrected and normalized; pure confirmation questions are skipped. A message up to 500 characters is stored as one memory; longer text is chunked at sentence boundaries.
 
 ```json
-{
-  "text": "confirm my order — one two three four, actually four three two one",
-  "sessionId": "sess_abc",
-  "userId": "u_alice",
-  "source": "voice",
-  "metadata": { "channel": "phone" }
-}
+{ "userId": "u_alice", "sessionId": "call_123", "text": "my room number is 13... sorry 913", "source": "voice", "metadata": { "channel": "phone" } }
 ```
-
-**Response**
 
 ```json
 {
   "memories": [
     {
-      "id": "mem_01H...",
-      "text": "confirm my order four three two one",
-      "sessionId": "sess_abc",
+      "id": "mem_…",
+      "userId": "u_alice",
+      "sessionId": "call_123",
+      "text": "my room number is 913",
       "kind": "fact",
-      "validFrom": "2026-08-31T14:30:00Z",
-      "validUntil": null,
-      "supersedesId": null,
-      "confidenceAlpha": 1,
-      "confidenceBeta": 1,
-      "accessCount": 0,
-      "lastAccessedAt": null,
-      "createdAt": "2026-08-31T14:30:00Z",
-      "updatedAt": "2026-08-31T14:30:00Z"
+      "source": "voice",
+      "metadata": { "channel": "phone", "originalText": "my room number is 13... sorry 913", "corrections": [ … ] },
+      "validFrom": "…", "validUntil": null, "supersedesId": null,
+      "confidenceAlpha": 1, "confidenceBeta": 1,
+      "createdAt": "…", "updatedAt": "…"
     }
   ]
 }
 ```
 
-`validUntil: null` means this fact is current. When a later save is
-detected as a near-duplicate correction of an existing fact (cross-
-session, by embedding similarity), the old row's `validUntil` is closed
-out and its id appears as this new row's `supersedesId` — you don't
-need to track memory ids yourself for this to work.
-
-`confidenceAlpha`/`confidenceBeta` are a Beta-Binomial belief posterior
-(`confidence = alpha / (alpha + beta)`), not a flat scalar — it
-strengthens as independent mentions corroborate the same fact across
-sessions.
+Skipped questions return `{ "memories": [], "skipped": "question-or-tooshort" }`. Restating a known fact returns the existing memory with `confidenceAlpha` raised instead of a duplicate; a changed number/email/phone in the same sentence frame returns a new memory whose `supersedesId` points at the one it replaced.
 
 ## POST /v1/recall
 
-Recall fuses four channels — vector similarity, keyword full-text,
-entity graph, and recency/frequency decay — via reciprocal rank
-fusion, then applies each hit's belief confidence as a final score
-modulator. Not plain vector search.
-
-**Request**
-
 ```json
-{
-  "query": "what did the caller confirm",
-  "sessionId": "sess_abc",
-  "topK": 5,
-  "includeCrossSession": false,
-  "asOf": "2026-08-15T00:00:00Z"
-}
+{ "userId": "u_alice", "query": "where does the caller live", "topK": 5 }
 ```
 
-`asOf` is optional — point-in-time recall. Omit it for "current facts
-only" (the default). Pass a past timestamp to see what was true as of
-that instant, even if it's since been corrected.
-
-**Response**
+| Field | Default | Notes |
+|---|---|---|
+| `query` | — | Required, up to 4,000 characters. |
+| `userId` | — | Scope to one user (recommended). Omitted = whole tenant. |
+| `sessionId` | — | Marks hits from this session as `tier: "session"`. |
+| `topK` | `8` | 1–50. |
+| `includeCrossSession` | `true` | `false` restricts to `sessionId`. |
+| `rerank` | `false` | Re-order hits with the tenant's configured reranker. |
+| `asOf` | now | ISO timestamp: what was true at that moment. |
 
 ```json
 {
   "hits": [
-    {
-      "memory": {
-        "id": "mem_01H...",
-        "text": "confirm my order four three two one",
-        "sessionId": "sess_abc",
-        "kind": "fact",
-        "createdAt": "2026-08-31T14:30:00Z"
-      },
-      "score": 0.91,
-      "tier": "session",
-      "channels": { "dense": 1, "keyword": 2, "temporal": 1 }
-    }
+    { "memory": { "id": "mem_…", "text": "my room number is 913", … }, "score": 0.0164, "tier": "cross", "channels": { "dense": 1, "keyword": 1 } }
   ],
-  "latencyMs": { "total": 2, "embed": 1, "search": 1, "rerank": 0 }
+  "latencyMs": { "total": 15, "embed": 6, "search": 8, "rerank": 0 }
 }
 ```
 
-`channels` shows the rank this hit held in each retrieval channel
-before fusion — absent for a channel means the hit didn't surface
-there at all. Useful for debugging why something did or didn't recall.
+`score` orders results; it isn't a probability, so don't threshold on it. `channels` shows each retrieval channel's rank for debugging.
 
-## POST /v1/ingest/partial
+## DELETE /v1/memories/:id
 
-Streaming ingestion during a live voice turn. Overwrites the working buffer.
+Forget one memory. Returns `204`.
 
-```json
-{ "sessionId": "sess_abc", "text": "confirm my order — one two three four" }
-```
+## POST /v1/ingest/partial · POST /v1/ingest/commit
 
-Returns `204 No Content`. Call as often as the ASR ships partials.
-
-## POST /v1/ingest/commit
-
-Freezes the buffer, runs self-correction, writes to storage. Exactly once per turn.
+Streaming voice turns — see [Voice concepts](/docs/voice).
 
 ```json
-{ "sessionId": "sess_abc", "userId": "u_alice", "source": "voice" }
+{ "sessionId": "call_123", "text": "my room number is" }
 ```
-
-Response is the same shape as `POST /v1/memories`.
-
-## GET /v1/profile
-
-Fetch the standing per-user profile — a consolidated summary folded
-from recurring facts across all of a user's sessions, so a voice agent
-can pull stable context at call start with one point-lookup instead of
-a fresh recall. Postgres-backed deployments only (not sandbox mode).
-
-```
-GET /v1/profile?userId=u_alice
-```
-
-**Response**
 
 ```json
-{
-  "summary": "Lives in Powai, Trikutta Towers. Phone ends 913.",
-  "confidence": 0.83,
-  "sourceMemoryIds": ["mem_01H...", "mem_01J..."],
-  "updatedAt": "2026-08-31T09:00:00Z"
-}
+{ "sessionId": "call_123", "userId": "u_alice" }
 ```
 
-`404` if no profile has been consolidated for this user yet.
+Commit returns `{ "saved": true, "text": "…", "memories": [ … ] }` or `{ "saved": false, "reason": "empty" | "not-substantive" | "question-or-tooshort" }`.
 
-## POST /v1/profile/consolidate
+## GET /v1/sessions/:id/subscribe
 
-Recomputes the profile from the user's current (non-superseded)
-memories: clusters them by embedding similarity, keeps clusters with
-2+ corroborating memories, and folds each into one summary line.
-Confidence is Beta-Binomial — more corroborating mentions means a
-tighter, more confident posterior, not a bigger number from a single
-model guess. No cron trigger yet; call this on whatever cadence suits
-your deployment.
+Server-Sent Events: `memory.saved` and `memory.forgotten` for that session (your tenant only).
 
-```
-POST /v1/profile/consolidate?userId=u_alice
-```
+## Persistent mode only
 
-**Response**
+With `STORE=supabase`:
+
+- `GET /v1/profile?userId=` — consolidated profile (`404` until one exists); `POST /v1/profile/consolidate?userId=` recomputes it from recurring facts.
+- `POST /v1/dpdp/right-to-forget`, `GET /v1/dpdp/export?userId=`, `POST /v1/dpdp/consent` — see [DPDP & data handling](/docs/dpdp).
+- `POST /v1/graph/entities`, `/entities/extract`, `/relations`, `/traverse` — entity graph.
+- `GET|POST /v1/models`, `POST /v1/models/:id/activate` — per-tenant reranker registry.
+
+## Errors
+
+Every error has one shape, with a request id you can quote in bug reports (also in the `X-Request-Id` header):
 
 ```json
-{
-  "consolidated": true,
-  "summary": "Lives in Powai, Trikutta Towers. Phone ends 913.",
-  "confidence": 0.83,
-  "sourceMemoryIds": ["mem_01H...", "mem_01J..."]
-}
+{ "error": { "code": "invalid_request", "message": "query: String must contain at least 1 character(s)", "requestId": "…" } }
 ```
 
-`{ "consolidated": false, "reason": "not enough recurring evidence" }`
-if no cluster had 2+ corroborating memories yet.
+| Status | `code` | When |
+|---|---|---|
+| 400 | `invalid_request` | Body/query failed validation; the message names the fields. |
+| 401 | `unauthorized` | Missing, invalid or revoked API key. |
+| 404 | `not_found` | Unknown route or resource. |
+| 413 | `payload_too_large` | Body over `MAX_BODY_BYTES` (default 256 KiB). |
+| 429 | `rate_limited` | Over `RATE_LIMIT_PER_MINUTE` for this key (default 600); see `Retry-After`. |
+| 500 | `internal_error` | Unexpected failure. Details are logged server-side without personal data. |
 
-## Error codes
+## Health
 
-| Status | Meaning |
-|---|---|
-| `401` | Missing or invalid `Authorization` header |
-| `403` | Key doesn't belong to the tenant that owns this session |
-| `422` | Body failed schema validation (Zod error is included in `detail`) |
-| `429` | Rate limited — check `Retry-After` |
-| `500` | Server error — please report at github.com/Ayushpani/smaran/issues |
-
-<Callout tone="info" title="Idempotency">
-Include an `Idempotency-Key` header on `/v1/memories` if you're retrying at the network layer — Smaran will collapse duplicate writes for 24 hours.
-</Callout>
+- `GET /health` — the process is up.
+- `GET /ready` — dependencies (the database) answer; `503` otherwise. Point load balancers here.

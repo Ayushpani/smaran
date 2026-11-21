@@ -463,8 +463,10 @@ export default function Landing() {
 		})
 		$("#npmBtn")?.addEventListener("click", () => {
 			navigator.clipboard
-				.writeText("npm i @smaran/sdk")
-				.then(() => showToast("npm i @smaran/sdk — copied"))
+				.writeText(
+					"git clone https://github.com/Ayushpani/smaran && cd smaran && bun install && bun run try",
+				)
+				.then(() => showToast("Run it locally — copied"))
 				.catch(() => showToast("Copy blocked by browser"))
 		})
 
@@ -1231,29 +1233,27 @@ export default function Landing() {
 						</div>
 						<div className="cpanel on" id="p-livekit">
 							<pre>
-								<code>{`import { LiveKitMemoryAdapter } from "@smaranai/adapter-livekit";
-import { createMemoryClient } from "@smaranai/sdk-ts";
+								<code>{`import { LiveKitVoiceAdapter } from "@smaranai/adapter-livekit";
+import { Smaran } from "@smaranai/sdk-ts";
 
-const memory = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY });
-const adapter = new LiveKitMemoryAdapter(memory, { sessionId, userId });
+const memory = new Smaran({ apiKey: process.env.SMARAN_API_KEY, baseUrl: SMARAN_URL });
+const adapter = new LiveKitVoiceAdapter({ memory, sessionId, userId });
 
-// Intercept speaker turns — inject recalled context before the LLM turn
-agent.on("user_speech_committed", async (turn) => {
-  const ctx = await adapter.onUserSpeech(turn.text);
-  agent.setContextPrefix(ctx);
-});`}</code>
+// Each final user turn: save it, and inject recalled context before the LLM turn
+adapter.onFinalTranscript(turn.text);
+const ctx = await adapter.buildContextPrefix(turn.text);`}</code>
 							</pre>
 						</div>
 						<div className="cpanel" id="p-vapi">
 							<pre>
-								<code>{`import { handleVapiWebhook } from "@smaranai/adapter-vapi";
-import { createMemoryClient } from "@smaranai/sdk-ts";
+								<code>{`import { handleVapiEvent } from "@smaranai/adapter-vapi";
+import { Smaran } from "@smaranai/sdk-ts";
 
-const smaran = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY });
+const smaran = new Smaran({ apiKey: process.env.SMARAN_API_KEY, baseUrl: SMARAN_URL });
 
 app.post("/vapi-webhook", async (req, res) => {
-  const response = await handleVapiWebhook(smaran, req.body);
-  res.json(response);
+  const { response } = await handleVapiEvent(req.body.message, { memory: smaran, session, userId });
+  res.json(response ?? {});
 });`}</code>
 							</pre>
 						</div>
@@ -1261,13 +1261,14 @@ app.post("/vapi-webhook", async (req, res) => {
 							<pre>
 								<code>{`import { withRecalledContext, memoryTools } from "@smaranai/adapter-anthropic";
 
-const { system, messages } = await withRecalledContext(smaran, {
-  system: "You are an empathetic voice assistant.",
-  messages: history,
-});
+const { system, messages } = await withRecalledContext(
+  smaran,
+  { system: "You are an empathetic voice assistant.", messages: history },
+  { userId },
+);
 
 const res = await anthropic.messages.create({
-  model: "claude-sonnet-4",
+  model: "claude-sonnet-4-5",
   system, messages,
   tools: memoryTools(),
 });`}</code>
@@ -1275,13 +1276,18 @@ const res = await anthropic.messages.create({
 						</div>
 						<div className="cpanel" id="p-openai">
 							<pre>
-								<code>{`import { OpenAIAdapter } from "@smaranai/adapter-openai";
+								<code>{`import { withRecalledContext, memoryTools } from "@smaranai/adapter-openai";
 
-const memory = new OpenAIAdapter(smaran, { userId, sessionId });
+const messages = await withRecalledContext(
+  smaran,
+  [{ role: "user", content: "Where did I say I moved?" }],
+  { userId },
+);
 
-const completion = await memory.wrap(openai).chat.completions.create({
-  model: "gpt-4o",
-  messages: [{ role: "user", content: "Where did I say I moved?" }],
+const completion = await openai.chat.completions.create({
+  model: "gpt-4o-mini",
+  messages,
+  tools: memoryTools(),
 });`}</code>
 							</pre>
 						</div>
@@ -1323,7 +1329,7 @@ const completion = await memory.wrap(openai).chat.completions.create({
 							</span>
 						</a>
 						<button className="npm" id="npmBtn" data-hover data-label="COPY">
-							npm i @smaran/sdk
+							bun run try
 						</button>
 					</div>
 					<div className="cta-fine rv" data-d=".24s">

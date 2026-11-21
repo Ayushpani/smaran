@@ -1,43 +1,34 @@
 ---
 title: Vapi
-description: Wire Smaran into a Vapi voice agent via one webhook.
+description: Handle Vapi server-URL events — memory function calls and transcripts — in one function.
 section: Integrations
 order: 3
 ---
 
-Vapi calls a webhook after every user turn. Point that webhook at a Next.js API route (or any HTTP handler) and let `@smaranai/adapter-vapi` do the rest.
+`@smaranai/adapter-vapi` routes Vapi server-URL messages. Function calls to `memory_save` / `memory_recall` are executed and answered; user transcripts feed a `StreamingSession` that saves each final turn. A runnable template lives in `apps/starter-vapi`.
 
-## Install
-
-```bash
-bun add @smaran/sdk @smaran/adapter-vapi
-```
-
-## Handler
+## Server handler
 
 ```ts
-import { handleVapiWebhook } from "@smaran/adapter-vapi"
-import { createMemoryClient } from "@smaran/sdk"
+import { Smaran } from "@smaranai/sdk-ts"
+import { StreamingSession } from "@repo/voice"
+import { handleVapiEvent } from "@smaranai/adapter-vapi"
 
-const smaran = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY })
+const smaran = new Smaran({ apiKey: process.env.SMARAN_API_KEY!, baseUrl: process.env.SMARAN_URL })
 
 export async function POST(req: Request) {
-  const body = await req.json()
-  const response = await handleVapiWebhook(smaran, body)
-  return Response.json(response)
+  const { message } = await req.json()
+  const callId = message.call?.id ?? "unknown"
+  const userId = message.customer?.number ?? callId
+  const session = new StreamingSession({ client: smaran, sessionId: callId, userId })
+
+  const result = await handleVapiEvent(message, { memory: smaran, session, userId, sessionId: callId })
+  return Response.json(result.response ?? {})
 }
 ```
 
-The adapter figures out which Vapi event you got (`function-call`, `end-of-call-report`, `transcript`) and does the right thing:
+Keep one `StreamingSession` per call (for example in a `Map` keyed by call id) so partial transcripts accumulate across requests.
 
-- **`transcript`** — partial ingestion, buffered per call.
-- **`end-of-call-report`** — commit; runs self-correction + save.
-- **`function-call`** — if the tool name is `smaran_recall`, returns hits inline.
+## Assistant configuration
 
-## Configure Vapi
-
-In the Vapi dashboard, set your assistant's **Server URL** to `https://your-app.dev/api/vapi-webhook`. Enable the `smaran_recall` function on the assistant so it can pull memory during a call.
-
-<Callout tone="note" title="Session ID mapping">
-The adapter uses Vapi's `call.id` as the Smaran `sessionId` by default. Override by passing `{ mapSession: (event) => customId }` if you want cross-call continuity per phone number.
-</Callout>
+Add the functions from `memoryFunctions()` to your assistant's tools and point its server URL at the handler above.

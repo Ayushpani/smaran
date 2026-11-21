@@ -1,37 +1,31 @@
 ---
 title: Retell
-description: Retell webhook → Smaran commit, one handler.
+description: Use Smaran from a Retell custom-LLM or function webhook via the REST API.
 section: Integrations
 order: 6
 ---
 
-Retell voice agents call your webhook with `call_started`, `call_ended`, `agent_response`, and `custom_function` events. Route them all through Smaran's Retell adapter.
+There's no dedicated Retell adapter yet. Retell agents reach your server through webhooks (custom LLM or custom functions), and the [TypeScript SDK](/docs/sdk) or [REST API](/docs/api) covers everything needed there.
 
-## Install
-
-```bash
-bun add @smaran/sdk @smaran/adapter-retell
-```
-
-## Handler
+## Custom function: recall
 
 ```ts
-import { handleRetellWebhook } from "@smaran/adapter-retell"
-import { createMemoryClient } from "@smaran/sdk"
+import { Smaran } from "@smaranai/sdk-ts"
 
-const smaran = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY })
+const smaran = new Smaran({ apiKey: process.env.SMARAN_API_KEY!, baseUrl: process.env.SMARAN_URL })
 
 export async function POST(req: Request) {
-  const body = await req.json()
-  const res = await handleRetellWebhook(smaran, body)
-  return Response.json(res)
+  const { call, args } = await req.json()
+  const userId = call?.from_number ?? call?.call_id
+  const { hits } = await smaran.recall({ userId, query: args.query, topK: 5 })
+  return Response.json({ result: hits.map((h) => h.memory.text).join("\n") || "nothing found" })
 }
 ```
 
-The adapter handles the three moments that matter:
+## Saving turns
 
-- **`call_started`** — opens a Smaran session keyed on `call.call_id`.
-- **`call_ended`** — commits any pending buffer, closes the session.
-- **`custom_function` with name `recall_memory`** — returns Smaran hits inline as the function result.
+When your webhook receives the user's final utterance, save it (self-correction runs server-side):
 
-Register `recall_memory` as a custom function on your Retell agent; the LLM will call it when it needs past context.
+```ts
+await smaran.save({ userId, sessionId: call.call_id, text: userUtterance, source: "voice" })
+```

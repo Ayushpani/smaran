@@ -1,53 +1,42 @@
 ---
-title: OpenAI / Codex
-description: Same memory across GPT chat completions, the Realtime API, and Codex CLI.
+title: OpenAI
+description: Recalled memory and memory tools for Chat Completions — and any OpenAI-compatible provider.
 section: Integrations
 order: 8
 ---
 
-The OpenAI adapter works against three surfaces:
+`@smaranai/adapter-openai` works with the OpenAI Chat Completions format, which also covers OpenAI-compatible providers (Groq, Together, DeepSeek, Ollama, LM Studio, vLLM). Not yet on npm — see the note on the [Anthropic page](/docs/adapters/anthropic).
 
-- Chat completions (`gpt-4o`, `gpt-4.1`, `gpt-5`)
-- Realtime API (voice)
-- Codex CLI (via its MCP support — see the [MCP guide](/docs/mcp))
-
-## Install
-
-```bash
-bun add @smaran/sdk @smaran/adapter-openai openai
-```
-
-## Chat completions
+## Inject recalled memories
 
 ```ts
 import OpenAI from "openai"
-import { OpenAIAdapter } from "@smaran/adapter-openai"
-import { createMemoryClient } from "@smaran/sdk"
+import { Smaran } from "@smaranai/sdk-ts"
+import { withRecalledContext, memoryTools } from "@smaranai/adapter-openai"
 
-const smaran = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY })
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-const memory = new OpenAIAdapter(smaran, { sessionId: "sess_abc" })
+const smaran = new Smaran({ apiKey: process.env.SMARAN_API_KEY!, baseUrl: process.env.SMARAN_URL })
+const openai = new OpenAI()
 
-const completion = await memory.wrap(openai).chat.completions.create({
-  model: "gpt-4o",
-  messages: [{ role: "user", content: "Where did I say I moved?" }],
+const messages = await withRecalledContext(smaran, history, { userId: "u_alice", topK: 5 })
+const res = await openai.chat.completions.create({
+  model: "gpt-4o-mini",
+  messages,
+  tools: memoryTools(),
 })
 ```
 
-`memory.wrap()` proxies the OpenAI client so every `create()` call gets Smaran context injected before the request and any tool calls to `smaran_save` / `smaran_recall` handled inline.
+`withRecalledContext` merges a `<recalled-memories>` block into the first system message (or adds one). With no matches, the messages are returned unchanged.
 
-## Realtime API (voice)
+## Handle tool calls
 
 ```ts
-import { OpenAIRealtimeAdapter } from "@smaran/adapter-openai/realtime"
+import { handleToolCall, isMemoryToolCall } from "@smaranai/adapter-openai"
 
-const rt = new OpenAIRealtimeAdapter(smaran, sessionId)
-realtimeSession.on("input_audio_buffer.committed", rt.onUserTurn)
-realtimeSession.on("response.done", rt.onAgentTurn)
+const calls = res.choices[0].message.tool_calls ?? []
+const toolMessages = await Promise.all(
+  calls.filter(isMemoryToolCall).map((c) => handleToolCall(smaran, c, { userId: "u_alice" })),
+)
+// append res.choices[0].message, then toolMessages, and call the model again
 ```
 
-The realtime adapter uses partial ingestion so recall context is ready by the time the LLM starts speaking.
-
-## Codex CLI
-
-Codex CLI supports MCP servers out of the box. See the [MCP setup](/docs/mcp#wire-it-into-the-codex-cli) for a two-line config that gives every `codex` command the same memory as your desktop Claude.
+Python: `pip install smaran-openai-sdk` provides the equivalent for the OpenAI Python SDK once published; see `packages/openai-sdk-python`.

@@ -21,7 +21,7 @@ const HERO_CARDS = [
 	{
 		slug: "docs/sdk",
 		title: "TypeScript SDK",
-		body: "createMemoryClient, save, recall. Copy-paste ready for any Node runtime.",
+		body: "Typed client with retries: save, recall, voice ingest, DPDP. Any fetch runtime.",
 	},
 	{
 		slug: "docs/api",

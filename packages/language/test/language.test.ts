@@ -65,3 +65,34 @@ describe("applySelfCorrection — cue position", () => {
 		).toBe("Andheri")
 	})
 })
+
+describe("applySelfCorrection — spoken numbers", () => {
+	test("patches only the spoken value, keeping the clause", () => {
+		expect(
+			applySelfCorrection(
+				"confirm my order — one two three four, actually four three two one",
+			).text,
+		).toBe("confirm my order — four three two one")
+	})
+
+	test("romanized Hindi number words count as values", () => {
+		expect(
+			applySelfCorrection("mera pin hai ek do teen, nahi teen do ek").text,
+		).not.toContain("ek do teen")
+	})
+})
+
+test("a clause-initial 'no' before a number corrects it; 'no problem' does not", () => {
+	expect(applySelfCorrection("flat number 21, no 12").text).toBe(
+		"flat number 12",
+	)
+	const polite = "thanks for the help, no problem"
+	expect(applySelfCorrection(polite).text).toBe(polite)
+})
+
+test("an '. and …' clause adds a fact instead of correcting the previous one", () => {
+	const r = applySelfCorrection(
+		"my email is old@example.com. actually new@example.com. and my extension is 42",
+	)
+	expect(r.text).toBe("my email is new@example.com, my extension is 42")
+})

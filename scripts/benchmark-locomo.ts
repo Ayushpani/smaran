@@ -70,16 +70,25 @@ async function loadDataset(): Promise<Sample[]> {
 }
 
 async function post(path: string, body: unknown): Promise<unknown> {
-	const res = await fetch(`${BASE}${path}`, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${KEY}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify(body),
-	})
-	if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`)
-	return res.json()
+	for (let attempt = 0; ; attempt++) {
+		const res = await fetch(`${BASE}${path}`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${KEY}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(body),
+		})
+		// Respect the API's rate limit rather than failing the run. Run the
+		// API with a high RATE_LIMIT_PER_MINUTE (as `bun run try` does) so
+		// throttling doesn't distort the latency numbers.
+		if (res.status === 429 && attempt < 20) {
+			await Bun.sleep(Number(res.headers.get("retry-after") ?? 1) * 1000)
+			continue
+		}
+		if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`)
+		return res.json()
+	}
 }
 
 function pct(xs: number[], p: number): number {

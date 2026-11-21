@@ -68,6 +68,7 @@ function tryCmd(): void {
 		PORT: process.env.PORT ?? "8787",
 		EMBEDDER: process.env.EMBEDDER ?? "local",
 		SANDBOX_API_KEY: process.env.SANDBOX_API_KEY ?? "sk_local_dev",
+		RATE_LIMIT_PER_MINUTE: process.env.RATE_LIMIT_PER_MINUTE ?? "1000000",
 	})
 }
 

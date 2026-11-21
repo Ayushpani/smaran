@@ -35,37 +35,51 @@ export function dpdpRouter(db: Db) {
 		.post("/right-to-forget", zValidator("json", forgetInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { userId } = c.req.valid("json")
-			const [deletedMemories, deletedSessions] = await Promise.all([
-				db
-					.delete(schema.memories)
-					.where(
-						and(
-							eq(schema.memories.tenantId, tenantId),
-							eq(schema.memories.userId, userId),
-						),
-					)
-					.returning({ id: schema.memories.id }),
-				db
-					.delete(schema.sessions)
-					.where(
-						and(
-							eq(schema.sessions.tenantId, tenantId),
-							eq(schema.sessions.userId, userId),
-						),
-					)
-					.returning({ id: schema.sessions.id }),
-			])
+			// One transaction: erasure is all-or-nothing. The profile is a
+			// summary OF the user's memories, so it is personal data too.
+			const { deletedMemories, deletedSessions, deletedProfiles } =
+				await db.transaction(async (tx) => {
+					const deletedMemories = await tx
+						.delete(schema.memories)
+						.where(
+							and(
+								eq(schema.memories.tenantId, tenantId),
+								eq(schema.memories.userId, userId),
+							),
+						)
+						.returning({ id: schema.memories.id })
+					const deletedSessions = await tx
+						.delete(schema.sessions)
+						.where(
+							and(
+								eq(schema.sessions.tenantId, tenantId),
+								eq(schema.sessions.userId, userId),
+							),
+						)
+						.returning({ id: schema.sessions.id })
+					const deletedProfiles = await tx
+						.delete(schema.profiles)
+						.where(
+							and(
+								eq(schema.profiles.tenantId, tenantId),
+								eq(schema.profiles.userId, userId),
+							),
+						)
+						.returning({ id: schema.profiles.id })
+					return { deletedMemories, deletedSessions, deletedProfiles }
+				})
 			return c.json({
 				userId,
 				memoriesDeleted: deletedMemories.length,
 				sessionsDeleted: deletedSessions.length,
+				profileDeleted: deletedProfiles.length > 0,
 				forgetTimestamp: new Date().toISOString(),
 			})
 		})
 		.get("/export", zValidator("query", exportInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { userId } = c.req.valid("query")
-			const [memories, sessions] = await Promise.all([
+			const [memories, sessions, profiles] = await Promise.all([
 				db
 					.select()
 					.from(schema.memories)
@@ -84,6 +98,15 @@ export function dpdpRouter(db: Db) {
 							eq(schema.sessions.userId, userId),
 						),
 					),
+				db
+					.select()
+					.from(schema.profiles)
+					.where(
+						and(
+							eq(schema.profiles.tenantId, tenantId),
+							eq(schema.profiles.userId, userId),
+						),
+					),
 			])
 			const stripped = memories.map((m) => ({ ...m, embedding: undefined }))
 			return c.json({
@@ -92,6 +115,7 @@ export function dpdpRouter(db: Db) {
 				exportedAt: new Date().toISOString(),
 				memories: stripped,
 				sessions,
+				profile: profiles[0] ?? null,
 			})
 		})
 		.post("/consent", zValidator("json", consentInput), async (c) => {

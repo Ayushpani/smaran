@@ -21,7 +21,11 @@ Every number quoted anywhere on the site, README or docs must resolve to a run i
 
 Save p50 12.9 ms / p95 24.9 ms (n=5882). Recall p50 14.8 ms / p95 22.3 ms (n=1536).
 
-Same run with `EMBEDDER=hash` (no semantic model, keyword channel only effectively): Hit@1 4.6%, Hit@10 52.3%, MRR 0.178.
+**Same benchmark on Postgres** (`STORE=supabase`: local PostgreSQL 16 + pgvector 0.6 on the same machine, migrations 0000–0004): Hit@1 37.4%, Hit@5 62.2%, **Hit@10 71.5%**, full evidence 59.1%, MRR 0.481. **Save p50 22.9 ms / p95 37.8 ms; recall p50 29.9 ms / p95 42.6 ms.** Real deployments add the network round trip to the database.
+
+Postgres fixes behind those numbers (before → after, full run): keyword search OR-ed and IDF-weighted in a single lexeme join (it previously required every query word to match, and the first IDF version re-parsed queries per row); dense search made exact within the user's scope instead of HNSW post-filtering; the unused HNSW index dropped; recall no longer waits for its access-count write. Save p95 299 → 38 ms, recall p95 108 → 43 ms.
+
+Same in-memory run with `EMBEDDER=hash` (no semantic model, keyword channel only effectively): Hit@1 4.6%, Hit@10 52.3%, MRR 0.178.
 
 How the engine got here, each step measured on conversation 1 (150 questions, hit@1 / hit@10):
 
@@ -31,7 +35,7 @@ How the engine got here, each step measured on conversation 1 (150 questions, hi
 | Recency demoted to a tie-breaker, IDF-weighted keyword scoring                            | 25.0% | 60.5%  |
 | Messages kept whole (only text > 500 chars is chunked)                                    | 31.6% | 68.4%  |
 
-Reproduce:
+Reproduce (Postgres: set `STORE=supabase DATABASE_URL=…`, run `bun --filter @repo/db db:migrate` and `db:seed`, pass the seeded key as `SMARAN_API_KEY`):
 
 ```bash
 bun run try                              # terminal 1 (fresh process — no prior data)

@@ -314,10 +314,13 @@ export function createCore(deps: CoreDeps): MemoryCore {
 			.slice(0, topK)
 
 		if (ranked.length > 0) {
-			await store.touchAccess(
-				query.tenantId,
-				ranked.map((r) => r.row.memory.id),
-			)
+			// Best-effort usage stats — never make the caller wait on a write.
+			void store
+				.touchAccess(
+					query.tenantId,
+					ranked.map((r) => r.row.memory.id),
+				)
+				.catch(() => {})
 		}
 
 		const hits = ranked.map(({ row, score }) => ({

@@ -96,9 +96,15 @@ export function createLocalEmbedder(
 		return out
 	}
 
+	// Measured for multilingual-e5-small: same-topic pairs ≥ 0.848,
+	// different-topic pairs ≤ 0.847 (see RESULTS.md). Other models are
+	// uncalibrated and fall back to the core default.
+	const topicSimilarity = model === DEFAULT_LOCAL_MODEL ? 0.85 : undefined
+
 	return {
 		dim,
 		model,
+		topicSimilarity,
 		async warm() {
 			await load()
 		},

@@ -116,7 +116,10 @@ if (isSandbox) {
 		.route("/v1/dpdp", dpdpRouter(db!))
 		.route("/v1/graph", graphRouter(db!))
 		.route("/v1/models", modelsRouter(db!, modelResolver))
-		.route("/v1/profile", profileRouter(db!))
+		.route(
+			"/v1/profile",
+			profileRouter(db!, { topicSimilarity: embedder.topicSimilarity }),
+		)
 }
 
 const port = env.PORT

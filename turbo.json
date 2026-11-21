@@ -15,7 +15,8 @@
 		},
 		"test": {
 			"dependsOn": ["^check-types"],
-			"cache": false
+			"cache": false,
+			"passThroughEnv": ["DATABASE_URL"]
 		},
 		"dev": {
 			"cache": false,

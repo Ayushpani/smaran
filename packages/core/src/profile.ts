@@ -82,8 +82,10 @@ export function clusterMemories(
 export function consolidateProfile(
 	memories: ClusterableMemory[],
 	minEvidence: number = MIN_EVIDENCE_TO_INCLUDE,
+	/** Cosine similarity at which two memories are "the same topic" — model-specific; see Embedder.topicSimilarity. */
+	threshold: number = CLUSTER_SIMILARITY_THRESHOLD,
 ): ProfileResult | null {
-	const clusters = clusterMemories(memories).filter(
+	const clusters = clusterMemories(memories, threshold).filter(
 		(c) => c.length >= minEvidence,
 	)
 	if (clusters.length === 0) return null
@@ -101,7 +103,9 @@ export function consolidateProfile(
 		for (let i = 1; i < cluster.length; i++) belief = corroborate(belief)
 	}
 
-	return { summary: lines.join(". "), belief, sourceMemoryIds }
+	// Strip each line's own terminal punctuation so joining doesn't yield "lake.. Tea".
+	const summary = `${lines.map((l) => l.trim().replace(/[\p{Sentence_Terminal}\s]+$/u, "")).join(". ")}.`
+	return { summary, belief, sourceMemoryIds }
 }
 
 function cosine(a: Float32Array, b: Float32Array): number {

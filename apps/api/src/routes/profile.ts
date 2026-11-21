@@ -22,7 +22,7 @@ import { auth } from "../auth.ts"
 
 const userIdQuery = z.object({ userId: z.string().min(1).max(200) })
 
-export function profileRouter(db: Db) {
+export function profileRouter(db: Db, opts: { topicSimilarity?: number } = {}) {
 	const store = createProfileStore(db)
 
 	return new Hono()
@@ -37,7 +37,11 @@ export function profileRouter(db: Db) {
 			const { tenantId } = auth(c)
 			const { userId } = c.req.valid("query")
 			const memories = await store.fetchCurrentMemories(tenantId, userId)
-			const result = consolidateProfile(memories)
+			const result = consolidateProfile(
+				memories,
+				undefined,
+				opts.topicSimilarity,
+			)
 			if (!result) {
 				return c.json({
 					consolidated: false,

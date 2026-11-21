@@ -137,9 +137,6 @@ export const memories = pgTable(
 		tenantIdx: index("memories_tenant_idx").on(t.tenantId),
 		sessionIdx: index("memories_session_idx").on(t.sessionId),
 		userIdx: index("memories_user_idx").on(t.userId),
-		embedHnsw: index("memories_embedding_hnsw")
-			.using("hnsw", t.embedding.op("vector_cosine_ops"))
-			.with({ m: 16, ef_construction: 64 }),
 		currentIdx: index("memories_tenant_user_current_idx")
 			.on(t.tenantId, t.userId, t.validUntil)
 			.where(sql`valid_until IS NULL`),

@@ -1,4 +1,4 @@
-import { zValidator } from "@hono/zod-validator"
+import { validate } from "../http.ts"
 import type { MemoryCore } from "@repo/core"
 import { Hono } from "hono"
 import { z } from "zod"
@@ -17,7 +17,7 @@ const recallInput = z.object({
 })
 
 export function recallRouter(core: MemoryCore, resolver: ModelResolver) {
-	return new Hono().post("/", zValidator("json", recallInput), async (c) => {
+	return new Hono().post("/", validate("json", recallInput), async (c) => {
 		const { tenantId } = auth(c)
 		const body = c.req.valid("json")
 		const result = await core.recall({ tenantId, ...body })

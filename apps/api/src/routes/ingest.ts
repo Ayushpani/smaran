@@ -1,4 +1,4 @@
-import { zValidator } from "@hono/zod-validator"
+import { validate } from "../http.ts"
 import type { MemoryCore } from "@repo/core"
 import { isSubstantive, scrubAsrText } from "@repo/voice"
 import { Hono } from "hono"
@@ -63,13 +63,13 @@ export function ingestRouter(core: MemoryCore) {
 		`${tenantId}:${sessionId}`
 
 	return new Hono()
-		.post("/partial", zValidator("json", partialInput), (c) => {
+		.post("/partial", validate("json", partialInput), (c) => {
 			const { tenantId } = auth(c)
 			const { sessionId, text } = c.req.valid("json")
 			const merged = buffers.append(key(tenantId, sessionId), text)
 			return c.json({ sessionId, bufferLen: merged.length })
 		})
-		.post("/commit", zValidator("json", commitInput), async (c) => {
+		.post("/commit", validate("json", commitInput), async (c) => {
 			const { tenantId } = auth(c)
 			const body = c.req.valid("json")
 			const bufKey = key(tenantId, body.sessionId)

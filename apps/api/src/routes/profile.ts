@@ -1,4 +1,4 @@
-import { zValidator } from "@hono/zod-validator"
+import { validate } from "../http.ts"
 import { consolidateProfile } from "@repo/core"
 import { createProfileStore, type Db } from "@repo/db"
 import { Hono } from "hono"
@@ -26,14 +26,14 @@ export function profileRouter(db: Db, opts: { topicSimilarity?: number } = {}) {
 	const store = createProfileStore(db)
 
 	return new Hono()
-		.get("/", zValidator("query", userIdQuery), async (c) => {
+		.get("/", validate("query", userIdQuery), async (c) => {
 			const { tenantId } = auth(c)
 			const { userId } = c.req.valid("query")
 			const profile = await store.getProfile(tenantId, userId)
 			if (!profile) throw new HTTPException(404, { message: "no profile yet" })
 			return c.json(profile)
 		})
-		.post("/consolidate", zValidator("query", userIdQuery), async (c) => {
+		.post("/consolidate", validate("query", userIdQuery), async (c) => {
 			const { tenantId } = auth(c)
 			const { userId } = c.req.valid("query")
 			const memories = await store.fetchCurrentMemories(tenantId, userId)

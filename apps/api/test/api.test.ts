@@ -4,11 +4,13 @@ import { beforeAll, describe, expect, test } from "bun:test"
 process.env.STORE = "memory"
 process.env.EMBEDDER = "hash"
 process.env.SANDBOX_API_KEY = "sk_test"
+process.env.RATE_LIMIT_PER_MINUTE = "40"
+process.env.MAX_BODY_BYTES = "2048"
 
 let fetchApp: (req: Request) => Promise<Response> | Response
 beforeAll(async () => {
 	const mod = await import("../src/index.ts")
-	fetchApp = mod.default.fetch
+	fetchApp = mod.handler
 })
 
 function call(path: string, body?: unknown, key = "sk_test") {
@@ -64,5 +66,54 @@ describe("api", () => {
 			})
 		).json()) as { saved: boolean }
 		expect(voice.saved).toBe(false)
+	})
+})
+
+describe("hardening", () => {
+	test("errors use one JSON shape with a request id", async () => {
+		const res = await call("/v1/recall", { query: "x" }, "wrong")
+		const body = (await res.json()) as {
+			error: { code: string; requestId: string }
+		}
+		expect(body.error.code).toBe("unauthorized")
+		expect(body.error.requestId).toBe(res.headers.get("x-request-id")!)
+	})
+
+	test("validation errors name the field, never echo values", async () => {
+		const res = await call("/v1/recall", { query: "", topK: 999 })
+		expect(res.status).toBe(400)
+		const body = (await res.json()) as {
+			error: { code: string; message: string }
+		}
+		expect(body.error.code).toBe("invalid_request")
+		expect(body.error.message).toContain("query")
+		expect(body.error.message).toContain("topK")
+	})
+
+	test("unknown routes return JSON 404", async () => {
+		const res = await call("/v1/nope")
+		expect(res.status).toBe(404)
+		expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+			"not_found",
+		)
+	})
+
+	test("oversized bodies are rejected with 413", async () => {
+		const res = await call("/v1/memories", { text: "x".repeat(5000) })
+		expect(res.status).toBe(413)
+	})
+
+	test("rate limit returns 429 with Retry-After per key", async () => {
+		let limited: Response | undefined
+		for (let i = 0; i < 45 && !limited; i++) {
+			const r = await call("/v1/recall", { query: "x" }, "burst-key")
+			if (r.status === 429) limited = r
+		}
+		expect(limited).toBeDefined()
+		expect(Number(limited!.headers.get("retry-after"))).toBeGreaterThan(0)
+		// A different key is unaffected.
+		expect((await call("/v1/recall", { query: "hello there" })).status).toBe(
+			200,
+		)
 	})
 })

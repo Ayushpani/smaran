@@ -23,23 +23,46 @@ async function hashKey(key: string): Promise<string> {
 		.join("")
 }
 
+/**
+ * Bearer API-key auth against the hashed `api_keys` table. Lookups are
+ * cached in-process for KEY_CACHE_TTL_MS (hits AND misses) so the hot path
+ * doesn't pay a database round trip per request; a revoked key therefore
+ * stops working within that window, not instantly.
+ */
+const KEY_CACHE_TTL_MS = 30_000
+const KEY_CACHE_MAX = 10_000
+
 export function apiKeyAuth(db: Db): MiddlewareHandler {
+	const cache = new Map<
+		string,
+		{ value: AuthContext | null; expiresAt: number }
+	>()
 	return async (c, next) => {
 		const token = readBearer(c)
 		const hashed = await hashKey(token)
-		const [row] = await db
-			.select({ id: schema.apiKeys.id, tenantId: schema.apiKeys.tenantId })
-			.from(schema.apiKeys)
-			.where(
-				and(
-					eq(schema.apiKeys.hashedKey, hashed),
-					isNull(schema.apiKeys.revokedAt),
-				),
-			)
-			.limit(1)
-
-		if (!row) throw new HTTPException(401, { message: "invalid api key" })
-		c.set("auth", { tenantId: row.tenantId, apiKeyId: row.id })
+		const now = Date.now()
+		let entry = cache.get(hashed)
+		if (!entry || entry.expiresAt <= now) {
+			const [row] = await db
+				.select({ id: schema.apiKeys.id, tenantId: schema.apiKeys.tenantId })
+				.from(schema.apiKeys)
+				.where(
+					and(
+						eq(schema.apiKeys.hashedKey, hashed),
+						isNull(schema.apiKeys.revokedAt),
+					),
+				)
+				.limit(1)
+			entry = {
+				value: row ? { tenantId: row.tenantId, apiKeyId: row.id } : null,
+				expiresAt: now + KEY_CACHE_TTL_MS,
+			}
+			if (cache.size >= KEY_CACHE_MAX) cache.clear()
+			cache.set(hashed, entry)
+		}
+		if (!entry.value)
+			throw new HTTPException(401, { message: "invalid api key" })
+		c.set("auth", entry.value)
 		await next()
 	}
 }

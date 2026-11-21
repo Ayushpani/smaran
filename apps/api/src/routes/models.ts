@@ -1,4 +1,4 @@
-import { zValidator } from "@hono/zod-validator"
+import { validate } from "../http.ts"
 import { schema, type Db } from "@repo/db"
 import { and, desc, eq, isNull, or } from "drizzle-orm"
 import { Hono } from "hono"
@@ -40,7 +40,7 @@ function newId(prefix: string): string {
 
 export function modelsRouter(db: Db, resolver?: ModelResolver) {
 	return new Hono()
-		.post("/", zValidator("json", registerInput), async (c) => {
+		.post("/", validate("json", registerInput), async (c) => {
 			const { tenantId } = auth(c)
 			const body = c.req.valid("json")
 			const [row] = await db
@@ -56,7 +56,7 @@ export function modelsRouter(db: Db, resolver?: ModelResolver) {
 				.returning()
 			return c.json({ model: row })
 		})
-		.get("/", zValidator("query", listQuery), async (c) => {
+		.get("/", validate("query", listQuery), async (c) => {
 			const { tenantId } = auth(c)
 			const { role, includeDefaults } = c.req.valid("query")
 			const tenantMatch = includeDefaults
@@ -74,7 +74,7 @@ export function modelsRouter(db: Db, resolver?: ModelResolver) {
 				.orderBy(desc(schema.modelRegistry.createdAt))
 			return c.json({ models: rows })
 		})
-		.post("/:id/activate", zValidator("param", activateInput), async (c) => {
+		.post("/:id/activate", validate("param", activateInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { id } = c.req.valid("param")
 			const [target] = await db

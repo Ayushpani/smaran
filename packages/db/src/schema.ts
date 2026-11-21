@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import {
+	boolean,
 	customType,
 	index,
 	integer,
@@ -240,5 +241,33 @@ export const relations = pgTable(
 	(t) => ({
 		tenantIdx: index("relations_tenant_idx").on(t.tenantId),
 		fromIdx: index("relations_from_idx").on(t.fromEntityId),
+	}),
+)
+
+export const consents = pgTable(
+	"consents",
+	{
+		id: text("id").primaryKey(),
+		tenantId: text("tenant_id")
+			.notNull()
+			.references(() => tenants.id, { onDelete: "cascade" }),
+		userId: text("user_id").notNull(),
+		sessionId: text("session_id"),
+		kind: text("kind", {
+			enum: ["record", "process", "retain", "share"],
+		}).notNull(),
+		granted: boolean("granted").notNull(),
+		scope: text("scope"),
+		recordedAt: timestamp("recorded_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	(t) => ({
+		tenantUserIdx: index("consents_tenant_user_idx").on(
+			t.tenantId,
+			t.userId,
+			t.kind,
+			t.recordedAt,
+		),
 	}),
 )

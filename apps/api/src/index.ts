@@ -15,10 +15,18 @@ import {
 	type Db,
 } from "@repo/db"
 import { Hono } from "hono"
+import { bodyLimit } from "hono/body-limit"
 import { cors } from "hono/cors"
-import { logger } from "hono/logger"
+import { sql } from "drizzle-orm"
 import { apiKeyAuth, sandboxAuth } from "./auth.ts"
 import { loadEnv } from "./env.ts"
+import {
+	errorBody,
+	notFound,
+	onError,
+	rateLimit,
+	requestContext,
+} from "./http.ts"
 import { createModelResolver } from "./model-resolver.ts"
 import { dpdpRouter } from "./routes/dpdp.ts"
 import { graphRouter } from "./routes/graph.ts"
@@ -84,11 +92,26 @@ const core = createCore({
 })
 
 const app = new Hono()
-	.use(logger())
-	.use(cors({ origin: env.CORS_ORIGIN }))
+	.use(requestContext())
+	.use(
+		cors({
+			origin: env.CORS_ORIGIN,
+			exposeHeaders: ["X-Request-Id", "Retry-After"],
+		}),
+	)
+	// Liveness: the process is up.
 	.get("/health", (c) =>
 		c.json({ ok: true, store: env.STORE, embedder: embedderName }),
 	)
+	// Readiness: dependencies answer. Load balancers should route on this.
+	.get("/ready", async (c) => {
+		try {
+			if (db) await db.execute(sql`SELECT 1`)
+			return c.json({ ready: true })
+		} catch {
+			return c.json({ ready: false, reason: "database unreachable" }, 503)
+		}
+	})
 	.get("/", (c) =>
 		c.json({
 			name: "smaran-api",
@@ -97,6 +120,30 @@ const app = new Hono()
 			docs: "https://github.com/Ayushpani/smaran",
 		}),
 	)
+	.use(
+		"/v1/*",
+		bodyLimit({
+			maxSize: env.MAX_BODY_BYTES,
+			onError: (c) =>
+				c.json(
+					errorBody(c, "payload_too_large", "request body too large"),
+					413,
+				),
+		}),
+	)
+	.use(
+		"/v1/*",
+		rateLimit({
+			perMinute: env.RATE_LIMIT_PER_MINUTE,
+			key: (c) =>
+				c.req.header("Authorization") ??
+				c.req.header("x-forwarded-for") ??
+				"anonymous",
+		}),
+	)
+
+app.onError(onError)
+app.notFound(notFound)
 
 if (isSandbox) {
 	app
@@ -141,7 +188,27 @@ if (isSandbox) {
 	)
 }
 
-export default { port, fetch: app.fetch }
+// Named (not default) export: Bun auto-serves a default export with `fetch`,
+// which would double-bind the port alongside Bun.serve below.
+export const handler = app.fetch
+
+// When run directly (not imported by tests), serve with graceful shutdown:
+// on SIGTERM/SIGINT stop accepting connections, let in-flight requests
+// finish, then close the database pool.
+if (import.meta.main) {
+	const server = Bun.serve({ port, fetch: app.fetch, idleTimeout: 120 })
+	const shutdown = async (signal: string) => {
+		console.log(JSON.stringify({ level: "info", msg: "shutdown", signal }))
+		await server.stop()
+		const client = (
+			db as unknown as { $client?: { end(o?: object): Promise<void> } }
+		)?.$client
+		await client?.end({ timeout: 5 })
+		process.exit(0)
+	}
+	process.on("SIGTERM", () => void shutdown("SIGTERM"))
+	process.on("SIGINT", () => void shutdown("SIGINT"))
+}
 
 /**
  * A no-op ModelResolver for sandbox mode. In persistent mode the real

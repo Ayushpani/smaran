@@ -1,4 +1,4 @@
-import { zValidator } from "@hono/zod-validator"
+import { validate } from "../http.ts"
 import type { MemoryCore } from "@repo/core"
 import { Hono } from "hono"
 import { z } from "zod"
@@ -17,7 +17,7 @@ const deleteParams = z.object({ id: z.string().min(1) })
 
 export function memoriesRouter(core: MemoryCore) {
 	return new Hono()
-		.post("/", zValidator("json", saveInput), async (c) => {
+		.post("/", validate("json", saveInput), async (c) => {
 			const { tenantId } = auth(c)
 			const body = c.req.valid("json")
 
@@ -34,7 +34,7 @@ export function memoriesRouter(core: MemoryCore) {
 			})
 			return c.json({ memories })
 		})
-		.delete("/:id", zValidator("param", deleteParams), async (c) => {
+		.delete("/:id", validate("param", deleteParams), async (c) => {
 			const { tenantId } = auth(c)
 			const { id } = c.req.valid("param")
 			await core.forget(tenantId, id)

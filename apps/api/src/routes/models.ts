@@ -16,18 +16,18 @@ import type { ModelResolver } from "../model-resolver.ts"
  * the next commit so this stays a small, verifiable change.
  */
 
-const registerInput = z.object({
+export const registerInput = z.object({
 	role: z.enum(["embedder", "reranker"]),
 	name: z.string().min(1).max(200),
 	provider: z.string().min(1).max(60),
 	config: z.record(z.unknown()).optional(),
 })
 
-const activateInput = z.object({
+export const activateInput = z.object({
 	id: z.string().min(1),
 })
 
-const listQuery = z.object({
+export const listQuery = z.object({
 	role: z.enum(["embedder", "reranker"]).optional(),
 	includeDefaults: z.coerce.boolean().default(true),
 })

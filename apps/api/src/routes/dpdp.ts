@@ -19,15 +19,15 @@ import { auth } from "../auth.ts"
  * cross-tenant call is possible from any auth path.
  */
 
-const forgetInput = z.object({
+export const forgetInput = z.object({
 	userId: z.string().min(1).max(200),
 })
 
-const exportInput = z.object({
+export const exportInput = z.object({
 	userId: z.string().min(1).max(200),
 })
 
-const consentInput = z.object({
+export const consentInput = z.object({
 	userId: z.string().min(1).max(200),
 	sessionId: z.string().max(200).optional(),
 	kind: z.enum(["record", "process", "retain", "share"]),

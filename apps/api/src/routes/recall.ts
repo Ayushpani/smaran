@@ -5,7 +5,7 @@ import { z } from "zod"
 import { auth } from "../auth.ts"
 import type { ModelResolver } from "../model-resolver.ts"
 
-const recallInput = z.object({
+export const recallInput = z.object({
 	query: z.string().min(1).max(4_000),
 	userId: z.string().max(200).optional(),
 	sessionId: z.string().max(200).optional(),

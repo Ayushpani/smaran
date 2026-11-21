@@ -8,9 +8,11 @@ process.env.RATE_LIMIT_PER_MINUTE = "40"
 process.env.MAX_BODY_BYTES = "2048"
 
 let fetchApp: (req: Request) => Promise<Response> | Response
+let routes: Array<{ method: string; path: string }> = []
 beforeAll(async () => {
 	const mod = await import("../src/index.ts")
 	fetchApp = mod.handler
+	routes = mod.app.routes
 })
 
 function call(path: string, body?: unknown, key = "sk_test") {
@@ -115,5 +117,59 @@ describe("hardening", () => {
 		expect((await call("/v1/recall", { query: "hello there" })).status).toBe(
 			200,
 		)
+	})
+})
+
+describe("openapi", () => {
+	test("is served and documents every mounted /v1 route", async () => {
+		const res = await call("/openapi.json")
+		expect(res.status).toBe(200)
+		const spec = (await res.json()) as {
+			openapi: string
+			paths: Record<string, Record<string, unknown>>
+		}
+		expect(spec.openapi).toBe("3.1.0")
+		const mounted = routes
+			.filter((r) => r.path.startsWith("/v1/") && r.method !== "ALL")
+			.map(
+				(r) =>
+					`${r.method.toLowerCase()} ${r.path.replace(/:(\w+)/g, "{$1}").replace(/\/$/, "")}`,
+			)
+		const documented = new Set(
+			Object.entries(spec.paths).flatMap(([p, ops]) =>
+				Object.keys(ops).map((m) => `${m} ${p}`),
+			),
+		)
+		const missing = [...new Set(mounted)].filter((r) => !documented.has(r))
+		expect(missing).toEqual([])
+	})
+
+	test("request schemas come from the route validators", async () => {
+		const spec = (await (await call("/openapi.json")).json()) as {
+			paths: Record<
+				string,
+				Record<
+					string,
+					{
+						requestBody?: {
+							content: Record<
+								string,
+								{
+									schema: {
+										properties: Record<string, unknown>
+										required?: string[]
+									}
+								}
+							>
+						}
+					}
+				>
+			>
+		}
+		const schema =
+			spec.paths["/v1/recall"]!.post!.requestBody!.content["application/json"]!
+				.schema
+		expect(Object.keys(schema.properties)).toContain("asOf")
+		expect(schema.required).toEqual(["query"])
 	})
 })

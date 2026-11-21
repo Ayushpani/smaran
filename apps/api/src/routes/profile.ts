@@ -20,7 +20,7 @@ import { auth } from "../auth.ts"
  * a change to consolidateProfile()'s own logic.
  */
 
-const userIdQuery = z.object({ userId: z.string().min(1).max(200) })
+export const userIdQuery = z.object({ userId: z.string().min(1).max(200) })
 
 export function profileRouter(db: Db, opts: { topicSimilarity?: number } = {}) {
 	const store = createProfileStore(db)

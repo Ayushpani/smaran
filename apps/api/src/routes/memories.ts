@@ -5,7 +5,7 @@ import { z } from "zod"
 import { auth } from "../auth.ts"
 import { prepareText } from "../prepare.ts"
 
-const saveInput = z.object({
+export const saveInput = z.object({
 	text: z.string().min(1).max(50_000),
 	userId: z.string().max(200).optional(),
 	sessionId: z.string().max(200).optional(),
@@ -13,7 +13,7 @@ const saveInput = z.object({
 	metadata: z.record(z.unknown()).optional(),
 })
 
-const deleteParams = z.object({ id: z.string().min(1) })
+export const deleteParams = z.object({ id: z.string().min(1) })
 
 export function memoriesRouter(core: MemoryCore) {
 	return new Hono()

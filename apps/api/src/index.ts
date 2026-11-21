@@ -28,6 +28,7 @@ import {
 	requestContext,
 } from "./http.ts"
 import { createModelResolver } from "./model-resolver.ts"
+import { buildOpenApi } from "./openapi.ts"
 import { dpdpRouter } from "./routes/dpdp.ts"
 import { graphRouter } from "./routes/graph.ts"
 import { ingestRouter } from "./routes/ingest.ts"
@@ -91,7 +92,9 @@ const core = createCore({
 	graph: isSandbox ? undefined : createGraphStore(db!),
 })
 
-const app = new Hono()
+const openapi = buildOpenApi({ persistent: !isSandbox })
+
+export const app = new Hono()
 	.use(requestContext())
 	.use(
 		cors({
@@ -112,6 +115,8 @@ const app = new Hono()
 			return c.json({ ready: false, reason: "database unreachable" }, 503)
 		}
 	})
+	// Machine-readable API description — generate a client in any language.
+	.get("/openapi.json", (c) => c.json(openapi))
 	.get("/", (c) =>
 		c.json({
 			name: "smaran-api",

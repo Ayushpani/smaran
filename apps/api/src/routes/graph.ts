@@ -17,7 +17,7 @@ import { auth } from "../auth.ts"
  *                            memories (hydrated).
  */
 
-const upsertInput = z.object({
+export const upsertInput = z.object({
 	entities: z
 		.array(
 			z.object({
@@ -30,11 +30,11 @@ const upsertInput = z.object({
 		.max(500),
 })
 
-const extractInput = z.object({
+export const extractInput = z.object({
 	text: z.string().min(1).max(50_000),
 })
 
-const relationsInput = z.object({
+export const relationsInput = z.object({
 	relations: z
 		.array(
 			z.object({
@@ -48,7 +48,7 @@ const relationsInput = z.object({
 		.max(500),
 })
 
-const traverseInput = z.object({
+export const traverseInput = z.object({
 	startEntityId: z.string().min(1),
 	maxHops: z.number().int().min(1).max(4).default(2),
 	memoryLimit: z.number().int().min(1).max(200).default(20),

@@ -14,13 +14,13 @@ import { prepareText } from "../prepare.ts"
  * a stateless webhook (Vapi, Retell, LiveKit egress).
  */
 
-const partialInput = z.object({
+export const partialInput = z.object({
 	sessionId: z.string().min(1).max(200),
 	userId: z.string().max(200).optional(),
 	text: z.string().min(1).max(4_000),
 })
 
-const commitInput = z.object({
+export const commitInput = z.object({
 	sessionId: z.string().min(1).max(200),
 	userId: z.string().max(200).optional(),
 	text: z.string().max(4_000).optional(),

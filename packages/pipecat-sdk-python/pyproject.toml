@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "smaran-pipecat"
-version = "0.1.1"
+version = "0.1.2"
 description = "Smaran integration for Pipecat - memory-enhanced conversational AI pipelines"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Ayush Panigrahi", email = "ayushpanigrahi84@gmail.com" }
 ]
@@ -25,7 +25,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -74,3 +73,8 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+# Local development: resolve the core SDK from this repo (ignored when
+# the package is built and published; the wheel depends on PyPI "smaran").
+[tool.uv.sources]
+smaran = { path = "../sdk-python", editable = true }

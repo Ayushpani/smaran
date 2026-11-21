@@ -47,3 +47,27 @@ jobs:
 
       - name: Run Biome CI (format & lint on changed files)
         run: bunx biome ci --changed --since=origin/main --no-errors-on-unmatched
+
+  python-packages:
+    name: Python SDK and integrations
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - sdk-python
+          - openai-sdk-python
+          - agent-framework-python
+          - pipecat-sdk-python
+          - cartesia-sdk-python
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      # Integrations resolve the core SDK from this repo via [tool.uv.sources].
+      - name: Run tests
+        run: uv run --with pytest --with pytest-asyncio --with respx python -m pytest -q tests

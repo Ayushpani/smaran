@@ -76,3 +76,8 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
+
+# Local development: resolve the core SDK from this repo (ignored when
+# the package is built and published; the wheel depends on PyPI "smaran").
+[tool.uv.sources]
+smaran = { path = "../sdk-python", editable = true }

@@ -7,8 +7,12 @@ order: 7
 
 `@smaranai/adapter-anthropic` translates Smaran into Anthropic Messages API shapes. It doesn't wrap the Anthropic client — you keep calling `messages.create` yourself.
 
-<Callout tone="note" title="Not on npm yet">
-The `@smaranai/*` packages are workspace packages in the Smaran repo and are not published to npm yet. Use them from the monorepo, or copy the adapter's single `src/index.ts`.
+```bash
+npm i @smaranai/sdk-ts @smaranai/adapter-anthropic @anthropic-ai/sdk
+```
+
+<Callout tone="note" title="First npm release pending">
+All `@smaranai/*` packages are built and smoke-tested for npm; until the first release, build them locally with `bun run scripts/build-package.ts packages/<name>`.
 </Callout>
 
 ## Inject recalled memories

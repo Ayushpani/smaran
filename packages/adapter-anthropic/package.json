@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-anthropic",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -22,5 +21,14 @@
 	},
 	"peerDependencies": {
 		"@anthropic-ai/sdk": ">=0.30"
-	}
+	},
+	"description": "Smaran memory for the Anthropic Messages API: tools, tool_use handling and recalled-memory system prompts.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

@@ -9,7 +9,13 @@ order: 1
 
 ## Install
 
-The package is not on npm yet. Until it is, use it from the monorepo (it's a workspace package) or copy `packages/sdk-ts/src/index.ts` into your project — it has no dependencies. Any other language can use the [REST API](/docs/api) or generate a client from `GET /openapi.json`.
+```bash
+npm i @smaranai/sdk-ts      # or: bun add / pnpm add / yarn add
+```
+
+<Callout tone="note" title="First npm release pending">
+The packages are built and smoke-tested for npm (see `scripts/npm-smoke`); the first release goes out with the publish workflow. Until then, build one locally with `bun run scripts/build-package.ts packages/sdk-ts` and install `packages/sdk-ts/dist-publish`, or copy `packages/sdk-ts/src/index.ts` — it has no dependencies. Any other language can use the [REST API](/docs/api) or generate a client from `GET /openapi.json`.
+</Callout>
 
 ## Create a client
 

@@ -72,3 +72,6 @@ Thumbs.db
 
 # Local embedding model cache
 .smaran/
+
+# Publish-ready package builds
+dist-publish/

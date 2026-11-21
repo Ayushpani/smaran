@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-vapi",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -18,5 +17,14 @@
 	},
 	"devDependencies": {
 		"typescript": "5.8.3"
-	}
+	},
+	"description": "Smaran memory for Vapi server-URL webhooks: memory function calls and streaming transcripts.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-langgraph",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -23,5 +22,14 @@
 	},
 	"peerDependencies": {
 		"@langchain/core": ">=0.3"
-	}
+	},
+	"description": "Smaran memory for LangGraph.js / LangChain.js: tools for ToolNode/createReactAgent and SystemMessage injection.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-vercel-ai",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -23,5 +22,14 @@
 	},
 	"peerDependencies": {
 		"ai": ">=5"
-	}
+	},
+	"description": "Smaran memory for the Vercel AI SDK: tool() set for generateText/streamText and context injection.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

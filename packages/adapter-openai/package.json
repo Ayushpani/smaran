@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-openai",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -22,5 +21,14 @@
 	},
 	"peerDependencies": {
 		"openai": ">=4"
-	}
+	},
+	"description": "Smaran memory for OpenAI Chat Completions and compatible APIs: tools, tool-call handling, recalled context.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

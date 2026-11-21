@@ -1,0 +1,48 @@
+name: Publish npm packages
+
+# Builds publish-ready copies of the SDK and adapters, gates on the npm
+# smoke test (tarballs installed with npm, strict tsc + run under Node),
+# then publishes every package whose version isn't on npm yet.
+# Requires an NPM_TOKEN repository secret (an npm automation token).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/sdk-ts/package.json"
+      - "packages/adapter-*/package.json"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - name: Smoke-test the packed packages under Node
+        run: scripts/npm-smoke/run.sh
+      - name: Publish new versions
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for dir in packages/sdk-ts packages/adapter-*; do
+            pub="$dir/dist-publish"
+            [ -f "$pub/package.json" ] || continue
+            name=$(node -p "require('./$pub/package.json').name")
+            version=$(node -p "require('./$pub/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "skip $name@$version (already published)"
+            else
+              (cd "$pub" && npm publish --access public --provenance)
+            fi
+          done

@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/sdk-ts",
 	"version": "0.1.0",
-	"private": true,
 	"type": "module",
 	"exports": {
 		".": {
@@ -15,5 +14,14 @@
 	},
 	"devDependencies": {
 		"typescript": "5.8.3"
-	}
+	},
+	"description": "Zero-dependency TypeScript client for the Smaran memory API \u2014 save, recall, voice ingest, DPDP; retries built in.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

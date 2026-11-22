@@ -14,14 +14,14 @@ Add to your MCP client config (Claude Desktop, Cursor, Windsurf, Claude Code, et
 
 ```json
 {
-  "mcpServers": {
-    "smaran": {
-      "url": "https://your-mcp-deployment/mcp",
-      "headers": {
-        "Authorization": "Bearer sk_your_smaran_api_key"
-      }
-    }
-  }
+	"mcpServers": {
+		"smaran": {
+			"url": "https://your-mcp-deployment/mcp",
+			"headers": {
+				"Authorization": "Bearer sk_your_smaran_api_key"
+			}
+		}
+	}
 }
 ```
 
@@ -35,19 +35,19 @@ Save or forget information about the user.
 
 ```json
 {
-  "content": "User prefers dark mode and uses TypeScript",
-  "action": "save",
-  "userId": "optional-user-id",
-  "sessionId": "optional-session-id"
+	"content": "User prefers dark mode and uses TypeScript",
+	"action": "save",
+	"userId": "optional-user-id",
+	"sessionId": "optional-session-id"
 }
 ```
 
-| Parameter   | Type                    | Required | Description |
-|-------------|-------------------------|----------|-------------|
-| `content`   | string                  | Yes      | The memory content to save, or a description of what to forget |
-| `action`    | `"save"` \| `"forget"`  | No       | Default: `"save"`. `"forget"` finds the closest matching memory by content and deletes it — no need to know its ID. |
-| `userId`    | string                  | No       | Scope to a specific user. Defaults to a single shared space. |
-| `sessionId` | string                  | No       | Group this memory under a session/conversation. |
+| Parameter   | Type                   | Required | Description                                                                                                         |
+| ----------- | ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `content`   | string                 | Yes      | The memory content to save, or a description of what to forget                                                      |
+| `action`    | `"save"` \| `"forget"` | No       | Default: `"save"`. `"forget"` finds the closest matching memory by content and deletes it — no need to know its ID. |
+| `userId`    | string                 | No       | Scope to a specific user. Defaults to a single shared space.                                                        |
+| `sessionId` | string                 | No       | Group this memory under a session/conversation.                                                                     |
 
 ### `recall`
 
@@ -55,24 +55,24 @@ Search the user's memories.
 
 ```json
 {
-  "query": "What are the user's programming preferences?",
-  "userId": "optional-user-id",
-  "sessionId": "optional-session-id",
-  "limit": 5
+	"query": "What are the user's programming preferences?",
+	"userId": "optional-user-id",
+	"sessionId": "optional-session-id",
+	"limit": 5
 }
 ```
 
-| Parameter   | Type   | Required | Description |
-|-------------|--------|----------|-------------|
+| Parameter   | Type   | Required | Description                            |
+| ----------- | ------ | -------- | -------------------------------------- |
 | `query`     | string | Yes      | Search query to find relevant memories |
-| `userId`    | string | No       | Scope recall to a specific user |
-| `sessionId` | string | No       | Scope recall to a specific session |
-| `limit`     | number | No       | Max results (1-20). Default: 5 |
+| `userId`    | string | No       | Scope recall to a specific user        |
+| `sessionId` | string | No       | Scope recall to a specific session     |
+| `limit`     | number | No       | Max results (1-20). Default: 5         |
 
 ## Prompts
 
-| Name      | Description |
-|-----------|-------------|
+| Name      | Description                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `context` | A reminder for the model to save memory-worthy facts as the conversation goes, and to recall before answering things that might depend on past context. |
 
 ## Development
@@ -96,10 +96,10 @@ Create a `.dev.vars` file:
 API_URL=http://localhost:8787
 ```
 
-| Variable         | Description                                    | Required |
-|------------------|-------------------------------------------------|----------|
-| `API_URL`        | Your Smaran API URL (self-hosted or managed)     | Yes      |
-| `POSTHOG_API_KEY`| Optional analytics                               | No       |
+| Variable          | Description                                  | Required |
+| ----------------- | -------------------------------------------- | -------- |
+| `API_URL`         | Your Smaran API URL (self-hosted or managed) | Yes      |
+| `POSTHOG_API_KEY` | Optional analytics                           | No       |
 
 ### Run Locally
 

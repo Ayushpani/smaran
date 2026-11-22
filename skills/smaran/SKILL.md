@@ -1,4 +1,5 @@
 ---
+
 name: smaran
 description: Use when building an AI agent or voice agent that needs to remember facts about a user across turns or sessions with Smaran's self-hosted memory API (save, recall, forget over HTTP).
 ---
@@ -15,7 +16,11 @@ key `sk_local_dev`, started with `bun run try`).
 `POST /v1/memories`
 
 ```json
-{ "text": "I prefer window seats. My daughter loves elephants.", "userId": "u1", "sessionId": "s1" }
+{
+	"text": "I prefer window seats. My daughter loves elephants.",
+	"userId": "u1",
+	"sessionId": "s1"
+}
 ```
 
 Text is split into sentences, cleaned (self-corrections like "13… sorry

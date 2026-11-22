@@ -47,14 +47,14 @@ if __name__ == "__main__":
 
 ### Parameters
 
-| Parameter    | Type         | Required | Description                                              |
-| ------------ | ------------ | -------- | ---------------------------------------------------------- |
-| `agent`      | LlmAgent     | **Yes**  | The Cartesia Line agent to wrap                            |
-| `user_id`    | str          | **Yes**  | User identifier memories are scoped to                     |
-| `session_id` | str          | **Yes**  | Conversation/call ID, used to group saved messages          |
-| `api_key`    | str          | No       | Smaran API key (or set `SMARAN_API_KEY` env var)            |
-| `base_url`   | str          | No       | Smaran API base URL (or set `SMARAN_URL` env var)           |
-| `config`     | MemoryConfig | No       | Advanced configuration                                      |
+| Parameter    | Type         | Required | Description                                        |
+| ------------ | ------------ | -------- | -------------------------------------------------- |
+| `agent`      | LlmAgent     | **Yes**  | The Cartesia Line agent to wrap                    |
+| `user_id`    | str          | **Yes**  | User identifier memories are scoped to             |
+| `session_id` | str          | **Yes**  | Conversation/call ID, used to group saved messages |
+| `api_key`    | str          | No       | Smaran API key (or set `SMARAN_API_KEY` env var)   |
+| `base_url`   | str          | No       | Smaran API base URL (or set `SMARAN_URL` env var)  |
+| `config`     | MemoryConfig | No       | Advanced configuration                             |
 
 ### Advanced Configuration
 
@@ -113,12 +113,12 @@ Audio Output
 
 ## Comparison with the Pipecat SDK
 
-| Aspect                  | Pipecat                        | Cartesia Line                |
-| ----------------------- | ------------------------------- | ----------------------------- |
-| **Integration pattern** | Extends `FrameProcessor`        | Wrapper around `LlmAgent`     |
-| **Event handling**      | `process_frame()` method        | `process()` method            |
-| **Events**              | `LLMContextFrame`                | `UserTurnEnded`, `CallStarted` |
-| **Context object**      | `LLMContext.get_messages()`     | `event.history`                |
+| Aspect                  | Pipecat                     | Cartesia Line                  |
+| ----------------------- | --------------------------- | ------------------------------ |
+| **Integration pattern** | Extends `FrameProcessor`    | Wrapper around `LlmAgent`      |
+| **Event handling**      | `process_frame()` method    | `process()` method             |
+| **Events**              | `LLMContextFrame`           | `UserTurnEnded`, `CallStarted` |
+| **Context object**      | `LLMContext.get_messages()` | `event.history`                |
 
 ## Development
 

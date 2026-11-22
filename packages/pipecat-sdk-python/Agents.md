@@ -54,11 +54,11 @@ memory = SmaranPipecatService(
 
 ## Memory Modes
 
-| Mode | Retrieves | Use When |
-|------|-----------|----------|
-| `"profile"` | User profile only | Personalization without search |
-| `"query"` | Search results only | Finding relevant past context |
-| `"full"` | Profile + search | Complete memory (default) |
+| Mode        | Retrieves           | Use When                       |
+| ----------- | ------------------- | ------------------------------ |
+| `"profile"` | User profile only   | Personalization without search |
+| `"query"`   | Search results only | Finding relevant past context  |
+| `"full"`    | Profile + search    | Complete memory (default)      |
 
 ## Environment Variables
 

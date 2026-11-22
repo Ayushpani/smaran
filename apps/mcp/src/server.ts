@@ -24,8 +24,14 @@ const memorySchema = z.object({
 		.string()
 		.max(200)
 		.optional()
-		.describe("Scope memories to a specific user (defaults to a single shared space)"),
-	sessionId: z.string().max(200).optional().describe("Group this memory under a session/conversation"),
+		.describe(
+			"Scope memories to a specific user (defaults to a single shared space)",
+		),
+	sessionId: z
+		.string()
+		.max(200)
+		.optional()
+		.describe("Group this memory under a session/conversation"),
 })
 
 const recallSchema = z.object({
@@ -34,8 +40,16 @@ const recallSchema = z.object({
 		.min(1)
 		.max(1000, "Query exceeds maximum length of 1,000 characters")
 		.describe("The search query to find relevant memories"),
-	userId: z.string().max(200).optional().describe("Scope recall to a specific user"),
-	sessionId: z.string().max(200).optional().describe("Scope recall to a specific session"),
+	userId: z
+		.string()
+		.max(200)
+		.optional()
+		.describe("Scope recall to a specific user"),
+	sessionId: z
+		.string()
+		.max(200)
+		.optional()
+		.describe("Scope recall to a specific session"),
 	limit: z.number().int().min(1).max(20).optional().default(5),
 })
 
@@ -51,9 +65,10 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 	})
 
 	async init() {
-		const storedClientInfo = await this.ctx.storage.get<{ name: string; version?: string }>(
-			"clientInfo",
-		)
+		const storedClientInfo = await this.ctx.storage.get<{
+			name: string
+			version?: string
+		}>("clientInfo")
 		if (storedClientInfo) {
 			this.clientInfo = storedClientInfo
 		}
@@ -63,7 +78,10 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 		this.server.server.oninitialized = async () => {
 			const clientVersion = this.server.server.getClientVersion()
 			if (clientVersion) {
-				this.clientInfo = { name: clientVersion.name, version: clientVersion.version }
+				this.clientInfo = {
+					name: clientVersion.name,
+					version: clientVersion.version,
+				}
 				await this.ctx.storage.put("clientInfo", this.clientInfo)
 			}
 		}
@@ -82,7 +100,8 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 		this.server.registerTool(
 			"recall",
 			{
-				description: "Search the user's memories for facts relevant to the current conversation.",
+				description:
+					"Search the user's memories for facts relevant to the current conversation.",
 				inputSchema: recallSchema,
 			},
 			// @ts-expect-error - zod type inference issue with MCP SDK
@@ -146,7 +165,10 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 				if (!result.found) {
 					return {
 						content: [
-							{ type: "text" as const, text: "No matching memory found close enough to forget." },
+							{
+								type: "text" as const,
+								text: "No matching memory found close enough to forget.",
+							},
 						],
 					}
 				}
@@ -187,10 +209,17 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 			}
 
 			return {
-				content: [{ type: "text" as const, text: `Saved memory (id: ${result.id})` }],
+				content: [
+					{ type: "text" as const, text: `Saved memory (id: ${result.id})` },
+				],
 			}
 		} catch (error) {
-			return { content: [{ type: "text" as const, text: `Error: ${describeError(error)}` }], isError: true }
+			return {
+				content: [
+					{ type: "text" as const, text: `Error: ${describeError(error)}` },
+				],
+				isError: true,
+			}
 		}
 	}
 
@@ -219,7 +248,9 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 				.catch((error) => console.error("PostHog tracking error:", error))
 
 			if (hits.length === 0) {
-				return { content: [{ type: "text" as const, text: "No memories found." }] }
+				return {
+					content: [{ type: "text" as const, text: "No memories found." }],
+				}
 			}
 
 			const parts = ["## Relevant memories"]
@@ -230,13 +261,23 @@ export class SmaranMCP extends McpAgent<Env, unknown, Props> {
 
 			return { content: [{ type: "text" as const, text: parts.join("\n") }] }
 		} catch (error) {
-			return { content: [{ type: "text" as const, text: `Error: ${describeError(error)}` }], isError: true }
+			return {
+				content: [
+					{ type: "text" as const, text: `Error: ${describeError(error)}` },
+				],
+				isError: true,
+			}
 		}
 	}
 
-	private async getClientInfo(): Promise<{ name: string; version?: string } | undefined> {
+	private async getClientInfo(): Promise<
+		{ name: string; version?: string } | undefined
+	> {
 		if (this.clientInfo) return this.clientInfo
-		const stored = await this.ctx.storage.get<{ name: string; version?: string }>("clientInfo")
+		const stored = await this.ctx.storage.get<{
+			name: string
+			version?: string
+		}>("clientInfo")
 		if (stored) {
 			this.clientInfo = stored
 			return this.clientInfo

@@ -25,13 +25,13 @@ bun --filter @repo/api dev
 
 ## Endpoints
 
-| Verb   | Path                                | Purpose                             |
-| ------ | ----------------------------------- | ----------------------------------- |
-| GET    | `/health`                           | Liveness + which embedder is wired. |
-| POST   | `/v1/memories`                      | Save one or more memories.          |
-| DELETE | `/v1/memories/:id`                  | Forget a memory.                    |
-| POST   | `/v1/recall`                        | Semantic recall + per-hop latency.  |
-| GET    | `/v1/sessions/:id/subscribe`        | SSE stream of memory events.        |
+| Verb   | Path                         | Purpose                             |
+| ------ | ---------------------------- | ----------------------------------- |
+| GET    | `/health`                    | Liveness + which embedder is wired. |
+| POST   | `/v1/memories`               | Save one or more memories.          |
+| DELETE | `/v1/memories/:id`           | Forget a memory.                    |
+| POST   | `/v1/recall`                 | Semantic recall + per-hop latency.  |
+| GET    | `/v1/sessions/:id/subscribe` | SSE stream of memory events.        |
 
 All `/v1/*` routes require `Authorization: Bearer <api key>`.
 

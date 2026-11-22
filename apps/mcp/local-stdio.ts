@@ -37,7 +37,9 @@ server.registerTool(
 		const uid = userId || DEFAULT_USER_ID
 		if (action === "forget") {
 			const r = await client.forgetByContent(content, uid, sessionId)
-			return text(r.found ? `Forgot: ${r.deletedText}` : "No matching memory found.")
+			return text(
+				r.found ? `Forgot: ${r.deletedText}` : "No matching memory found.",
+			)
 		}
 		const r = await client.save(content, uid, sessionId)
 		return text(r.saved ? "Saved." : "Not saved (question or too short).")
@@ -47,7 +49,8 @@ server.registerTool(
 server.registerTool(
 	"recall",
 	{
-		description: "Search the user's memories for facts relevant to the conversation.",
+		description:
+			"Search the user's memories for facts relevant to the conversation.",
 		inputSchema: {
 			query: z.string().min(1).max(1_000),
 			userId: z.string().max(200).optional(),
@@ -56,7 +59,12 @@ server.registerTool(
 		},
 	},
 	async ({ query, userId, sessionId, limit }) => {
-		const r = await client.recall(query, userId || DEFAULT_USER_ID, sessionId, limit)
+		const r = await client.recall(
+			query,
+			userId || DEFAULT_USER_ID,
+			sessionId,
+			limit,
+		)
 		if (r.hits.length === 0) return text("No relevant memories.")
 		return text(r.hits.map((h) => `- ${h.text}`).join("\n"))
 	},

@@ -71,6 +71,7 @@ bun --filter '@repo/api' dev
 ```
 
 CI (`.github/workflows/ci.yml`) runs on every PR:
+
 1. `bun install --frozen-lockfile`
 2. `bunx turbo run check-types`
 3. `bunx biome ci --changed --since=origin/main`
@@ -80,16 +81,19 @@ If either fails, the PR is blocked. Run both locally before pushing.
 ## Where to help — ranked by leverage
 
 **Highest impact** (helps everyone downstream):
+
 - Fill in more Hinglish markers / Devanagari coverage in `packages/language`
 - Add adapters for frameworks not yet covered (CrewAI, AutoGen, Semantic Kernel, LlamaIndex, Bolna, Retell)
 - A real benchmark dataset — a CI-integrated recall benchmark on public voice-agent data is the single most valuable contribution right now
 
 **Medium impact**:
+
 - Voice-platform SDK plugins (Retell, Bland, Pipecat proper)
 - Language coverage — more code-switching pairs, more script detection edge cases
 - Custom rerankers (`@repo/models`)
 
 **Also welcome**:
+
 - Docs improvements, README clarifications, adapter README examples
 - Bug fixes with a reproducing test
 

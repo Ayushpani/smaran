@@ -12,7 +12,7 @@ import OpenAI from "openai"
 import { Smaran } from "@smaranai/sdk-ts"
 import { handleToolCall, memoryTools } from "@smaranai/adapter-openai"
 
-const openai = new OpenAI()               // or baseURL: "https://api.groq.com/openai/v1", etc.
+const openai = new OpenAI() // or baseURL: "https://api.groq.com/openai/v1", etc.
 const memory = new Smaran({ apiKey: process.env.SMARAN_API_KEY! })
 const scope = { userId: "u_123", sessionId: "sess_abc" }
 
@@ -34,10 +34,14 @@ for (const call of msg.tool_calls ?? []) {
 ```ts
 import { withRecalledContext } from "@smaranai/adapter-openai"
 
-const augmented = await withRecalledContext(memory, [
-	{ role: "system", content: "You are a helpful assistant." },
-	{ role: "user", content: "book me a flight to Delhi" },
-], { sessionId: "sess_abc", topK: 5 })
+const augmented = await withRecalledContext(
+	memory,
+	[
+		{ role: "system", content: "You are a helpful assistant." },
+		{ role: "user", content: "book me a flight to Delhi" },
+	],
+	{ sessionId: "sess_abc", topK: 5 },
+)
 
 const res = await openai.chat.completions.create({ model, messages: augmented })
 ```

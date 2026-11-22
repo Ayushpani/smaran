@@ -17,10 +17,10 @@ trained on real call data.
 
 ```ts
 import {
-  detectLanguage,
-  normalizeCodeSwitched,
-  extractEntities,
-  SessionCoreference,
+	detectLanguage,
+	normalizeCodeSwitched,
+	extractEntities,
+	SessionCoreference,
 } from "@repo/language"
 
 const turn1 = "Meri beti Aanya ko elephants bahut pasand hain"

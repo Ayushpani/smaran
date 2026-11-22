@@ -32,12 +32,12 @@ await memory.save(text="my phone number is 98765 43211", user_id="user-123")
 This is the low-level client. Most users want one of the framework/platform
 integrations built on top of it instead of calling this directly:
 
-| Package | For |
-| --- | --- |
-| [`smaran-pipecat`](../pipecat-sdk-python) | Pipecat voice AI pipelines |
-| [`smaran-cartesia`](../cartesia-sdk-python) | Cartesia Line voice agents |
-| [`smaran-openai-sdk`](../openai-sdk-python) | OpenAI function calling / chat completions |
-| [`smaran-agent-framework`](../agent-framework-python) | Microsoft Agent Framework |
+| Package                                               | For                                        |
+| ----------------------------------------------------- | ------------------------------------------ |
+| [`smaran-pipecat`](../pipecat-sdk-python)             | Pipecat voice AI pipelines                 |
+| [`smaran-cartesia`](../cartesia-sdk-python)           | Cartesia Line voice agents                 |
+| [`smaran-openai-sdk`](../openai-sdk-python)           | OpenAI function calling / chat completions |
+| [`smaran-agent-framework`](../agent-framework-python) | Microsoft Agent Framework                  |
 
 ## Configuration
 

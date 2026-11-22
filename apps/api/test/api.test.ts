@@ -114,11 +114,15 @@ describe("hardening", () => {
 		}
 		expect(limited).toBeDefined()
 		expect(Number(limited!.headers.get("retry-after"))).toBeGreaterThan(0)
-		expect(((await limited!.json()) as { error: { code: string } }).error.code).toBe("rate_limited")
+		expect(
+			((await limited!.json()) as { error: { code: string } }).error.code,
+		).toBe("rate_limited")
 	})
 
 	test("invalid keys are rejected before reaching the account limiter", async () => {
-		expect((await call("/v1/recall", { query: "x" }, "burst-key")).status).toBe(401)
+		expect((await call("/v1/recall", { query: "x" }, "burst-key")).status).toBe(
+			401,
+		)
 	})
 })
 

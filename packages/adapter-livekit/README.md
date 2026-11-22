@@ -21,7 +21,9 @@ const adapter = new LiveKitVoiceAdapter({
 llm.tools.push(...memoryTools())
 
 // Wire LiveKit's transcript events:
-session.on("user_transcript_updated", (t) => adapter.onPartialTranscript(t.text))
+session.on("user_transcript_updated", (t) =>
+	adapter.onPartialTranscript(t.text),
+)
 session.on("user_turn_committed", (t) => adapter.onFinalTranscript(t.text))
 
 // Wire the function-call hook:

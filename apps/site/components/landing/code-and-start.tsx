@@ -147,21 +147,6 @@ curl $SMARAN/v1/recall \\
 	},
 ]
 
-const GH = "https://github.com/Ayushpani/smaran/tree/main/packages"
-const WORKS: [string, string][] = [
-	["Vapi", "/docs/adapters/vapi"],
-	["LiveKit", "/docs/adapters/livekit"],
-	["Pipecat", "/docs/adapters/pipecat"],
-	["Cartesia", `${GH}/cartesia-sdk-python`],
-	["OpenAI", "/docs/adapters/openai"],
-	["Anthropic", "/docs/adapters/anthropic"],
-	["Gemini", "/docs/adapters/gemini"],
-	["Vercel AI SDK", `${GH}/adapter-vercel-ai`],
-	["LangGraph", `${GH}/adapter-langgraph`],
-	["Mastra", `${GH}/adapter-mastra`],
-	["MCP", "/docs/mcp"],
-]
-
 export function CodeSection() {
 	const [tab, setTab] = useState(0)
 	const [copied, setCopied] = useState(false)
@@ -200,19 +185,9 @@ export function CodeSection() {
 					<p className="intro">
 						Save after the caller speaks. Recall before your agent replies.
 					</p>
-					<p className="works">
-						{WORKS.map(([name, href]) =>
-							href.startsWith("/") ? (
-								<Link key={name} href={href}>
-									{name}
-								</Link>
-							) : (
-								<a key={name} href={href}>
-									{name}
-								</a>
-							),
-						)}
-						<span className="rest">Anything else speaks HTTP.</span>
+					<p className="intro">
+						Every integration above wraps these same two calls. Use them
+						directly when nothing fits.
 					</p>
 				</div>
 				<div className="editor">

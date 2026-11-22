@@ -5,11 +5,20 @@ import { type FormEvent, useEffect, useRef } from "react"
 import { el, graphemes, gsap, motionOn, rand } from "@/lib/gsap"
 import { PALETTE_EVENT, token } from "@/lib/palette"
 import { correct } from "./correct"
+import { HeroField, RIPPLE_EVENT } from "./field"
+import { Rotator } from "./rotator"
 
 const EXAMPLES = [
 	"my flat is 21, no wait, 12, B wing",
 	"mera pin hai ek do teen, nahi, teen do ek",
 	"send it to priya@gmial.com, sorry, priya@gmail.com",
+]
+const PHRASES = [
+	"hears the correction.",
+	"keeps every fact’s history.",
+	"speaks Hindi and Hinglish.",
+	"plugs into your stack.",
+	"runs on your own Postgres.",
 ]
 const PRESETS = [
 	"my seat is 14C, sorry, 41C",
@@ -233,7 +242,23 @@ export function Hero() {
 					.filter((v): v is HTMLElement => !!v)
 				if (victims.length) {
 					t += 0.15
-					tl?.call(() => wave.flash(), undefined, t)
+					tl?.call(
+						() => {
+							wave.flash()
+							const r = victims[0]?.getBoundingClientRect()
+							if (r)
+								window.dispatchEvent(
+									new CustomEvent(RIPPLE_EVENT, {
+										detail: {
+											x: r.left + r.width / 2,
+											y: r.top + r.height / 2,
+										},
+									}),
+								)
+						},
+						undefined,
+						t,
+					)
 					tl?.to(
 						victims.map((v) => v.querySelector(".strike")),
 						{ scaleX: 1, duration: 0.32, ease: "power3.inOut" },
@@ -359,19 +384,19 @@ export function Hero() {
 
 	return (
 		<section className="hero tone-hero" data-tone="hero" id="top">
+			<HeroField />
 			<div className="wrap">
 				<div className="hero-top">
-					<h1>
-						Memory that hears the correction.
-						<span className="deva" lang="hi">
-							ऐसी याददाश्त जो सुधार भी सुनती है।
-						</span>
+					<h1 aria-label="Memory for voice agents. It hears the correction, keeps every fact’s history, speaks Hindi and Hinglish, plugs into your stack and runs on your own Postgres.">
+						<span aria-hidden="true">Memory for voice agents that</span>
+						<Rotator phrases={PHRASES} />
 					</h1>
 					<div className="hero-side">
 						<p className="lede">
-							When a caller says “21, no wait, 12”, Smaran stores 12 and brings
-							it back on the next call. For voice agents, in English, Hindi and
-							Hinglish, on your own server.
+							Smaran saves what callers say the way they meant it, and brings it
+							back on the next call: corrections applied, every fact dated, in
+							English, Hindi and Hinglish. Self-hosted, with ready-made pieces
+							for Vapi, LiveKit, Pipecat, OpenAI, Anthropic, Gemini and more.
 						</p>
 						<div className="actions">
 							<Link className="btn btn-solid" href="/signup">

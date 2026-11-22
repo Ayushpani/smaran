@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { Sidebar } from "@/components/docs/Sidebar"
 import { SIDEBAR } from "@/lib/docs"
 
 export const metadata = {
@@ -32,8 +31,7 @@ const HERO_CARDS = [
 
 export default function DocsIndex() {
 	return (
-		<div className="doc-shell">
-			<Sidebar current="docs" sections={SIDEBAR} />
+		<>
 			<main className="doc-main doc-index">
 				<div className="doc-eyebrow">Documentation</div>
 				<h1 className="doc-index-h1">
@@ -76,6 +74,6 @@ export default function DocsIndex() {
 					</div>
 				</div>
 			</main>
-		</div>
+		</>
 	)
 }

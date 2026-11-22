@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { gsap, motionOn } from "@/lib/gsap"
+import { graphemes, gsap, motionOn } from "@/lib/gsap"
 
 const ASKS = [
 	{ id: "en", tab: "English", lang: "en", q: "Where does the caller live?" },
@@ -69,28 +69,39 @@ export function Remembrance() {
 		setAsk(k)
 		if (!motionOn()) return
 		requestAnimationFrame(() => {
-			if (qRef.current)
-				gsap.fromTo(
-					qRef.current,
-					{ yPercent: 40, opacity: 0, filter: "blur(6px)" },
-					{
-						yPercent: 0,
-						opacity: 1,
-						filter: "blur(0px)",
-						duration: 0.6,
-						ease: "expo.out",
+			// The question types itself in the chosen script, then the same
+			// memories light up one after another.
+			const q = qRef.current?.querySelector<HTMLElement>("span[lang]")
+			const full = ASKS[k]!.q
+			if (q) {
+				const parts = graphemes(full)
+				const o = { n: 0 }
+				gsap.killTweensOf(o)
+				q.textContent = ""
+				gsap.to(o, {
+					n: parts.length,
+					duration: Math.min(1.1, parts.length * 0.045),
+					ease: "none",
+					onUpdate: () => {
+						q.textContent = parts.slice(0, Math.round(o.n)).join("")
 					},
-				)
-			if (aRef.current)
+					onComplete: () => {
+						q.textContent = full
+					},
+				})
+			}
+			const lines = aRef.current?.querySelectorAll(".line")
+			if (lines?.length)
 				gsap.fromTo(
-					aRef.current.querySelectorAll(".line"),
-					{ x: -14, opacity: 0.2 },
+					lines,
+					{ backgroundSize: "0% 100%", x: -10, opacity: 0.35 },
 					{
+						backgroundSize: "100% 100%",
 						x: 0,
 						opacity: 1,
-						duration: 0.55,
-						stagger: 0.08,
-						delay: 0.25,
+						duration: 0.7,
+						stagger: 0.14,
+						delay: 0.75,
 						ease: "power3.out",
 					},
 				)

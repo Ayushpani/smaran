@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation"
 import { compileMDX } from "next-mdx-remote/rsc"
-import { Sidebar } from "@/components/docs/Sidebar"
 import { Toc } from "@/components/docs/Toc"
 import Link from "next/link"
 import { allDocSlugs, extractToc, readDoc, SIDEBAR } from "@/lib/docs"
@@ -49,8 +48,7 @@ export default async function DocPage({ params }: { params: Promise<Params> }) {
 		options: { parseFrontmatter: false },
 	})
 	return (
-		<div className="doc-shell">
-			<Sidebar current={fullSlug} sections={SIDEBAR} />
+		<>
 			<main className="doc-main">
 				<div className="doc-eyebrow">{doc.section}</div>
 				<h1 className="doc-h1">{doc.title}</h1>
@@ -72,6 +70,6 @@ export default async function DocPage({ params }: { params: Promise<Params> }) {
 				</nav>
 			</main>
 			<Toc items={toc} />
-		</div>
+		</>
 	)
 }

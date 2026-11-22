@@ -43,13 +43,22 @@ export function SiteNav({ overHero = false }: { overHero?: boolean }) {
 					</span>
 				</Link>
 				<nav aria-label="Main">
-					<Link className="hide-sm" href="/#architecture">
+					<Link className="hide-sm hide-md" href="/#architecture">
 						How it works
+					</Link>
+					<Link className="hide-sm" href="/#features">
+						Features
+					</Link>
+					<Link className="hide-sm" href="/#integrations">
+						Integrations
 					</Link>
 					<Link href="/docs" aria-current={cur("/docs")}>
 						Docs
 					</Link>
-					<a className="hide-sm" href="https://github.com/Ayushpani/smaran">
+					<a
+						className="hide-sm hide-md"
+						href="https://github.com/Ayushpani/smaran"
+					>
 						GitHub
 					</a>
 					<Link href="/console" aria-current={cur("/console")}>

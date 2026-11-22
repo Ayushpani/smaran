@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { FootGiant } from "./foot-giant"
 import { PaletteSwitch } from "./palette-switch"
 
 export function SiteFooter() {
@@ -23,6 +24,12 @@ export function SiteFooter() {
 						<ul>
 							<li>
 								<Link href="/#architecture">How it works</Link>
+							</li>
+							<li>
+								<Link href="/#features">Features</Link>
+							</li>
+							<li>
+								<Link href="/#integrations">Integrations</Link>
 							</li>
 							<li>
 								<Link href="/#numbers">Benchmarks</Link>
@@ -69,9 +76,7 @@ export function SiteFooter() {
 						</ul>
 					</div>
 				</div>
-				<p className="foot-giant deva" lang="hi" aria-hidden="true">
-					स्मरण
-				</p>
+				<FootGiant />
 				<div className="foot-base">
 					<span>
 						Smaran, <span lang="hi">स्मरण</span>, is Hindi and Sanskrit for

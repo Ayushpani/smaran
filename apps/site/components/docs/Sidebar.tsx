@@ -1,17 +1,31 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { usePathname } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
 import type { SidebarSection } from "@/lib/docs"
 
-export function Sidebar({
-	current,
-	sections,
-}: {
-	current: string
-	sections: SidebarSection[]
-}) {
+export function Sidebar({ sections }: { sections: SidebarSection[] }) {
+	const path = usePathname()
+	const current = path.replace(/^\/|\/$/g, "") || "docs"
 	const [open, setOpen] = useState(false)
+	const navRef = useRef<HTMLElement>(null)
+	const first = useRef(true)
+
+	// On first load (or a direct link), bring the active page into view inside
+	// the sidebar. After that the sidebar keeps whatever scroll you left it at.
+	useEffect(() => {
+		if (!first.current) return
+		first.current = false
+		const nav = navRef.current
+		const on = nav?.querySelector<HTMLElement>(".doc-link.on")
+		if (!nav || !on) return
+		const n = nav.getBoundingClientRect()
+		const r = on.getBoundingClientRect()
+		if (r.top < n.top || r.bottom > n.bottom)
+			nav.scrollTop += r.top - n.top - n.height / 3
+	}, [])
+
 	return (
 		<div>
 			<button
@@ -25,6 +39,7 @@ export function Sidebar({
 			</button>
 			<nav
 				id="doc-sidebar"
+				ref={navRef}
 				className={`doc-sidebar${open ? " open" : ""}`}
 				aria-label="Docs navigation"
 			>
@@ -38,9 +53,13 @@ export function Sidebar({
 									<li key={it.slug}>
 										<Link
 											href={`/${it.slug}`}
+											scroll={false}
 											className={`doc-link${active ? " on" : ""}${it.stub ? " stub" : ""}`}
 											aria-current={active ? "page" : undefined}
-											onClick={() => setOpen(false)}
+											onClick={() => {
+												setOpen(false)
+												window.scrollTo({ top: 0 })
+											}}
 										>
 											{it.title}
 											{it.stub && <span className="doc-stub">soon</span>}

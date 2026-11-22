@@ -23,6 +23,9 @@ export function SiteFooter() {
 						<h3>Product</h3>
 						<ul>
 							<li>
+								<Link href="/playground">Playground</Link>
+							</li>
+							<li>
 								<Link href="/#architecture">How it works</Link>
 							</li>
 							<li>

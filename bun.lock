@@ -85,6 +85,7 @@
       "name": "@repo/site",
       "version": "0.1.0",
       "dependencies": {
+        "@smaranai/sdk-ts": "workspace:*",
         "gray-matter": "^4.0.3",
         "gsap": "3.12.5",
         "next": "^15.1.5",

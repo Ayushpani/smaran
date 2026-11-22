@@ -5,22 +5,11 @@
  * fixes what regex reliably catches, touches nothing it doesn't.
  */
 
-const FILLERS = new Set([
-	"um",
-	"uh",
-	"uhh",
-	"umm",
-	"er",
-	"ah",
-	"like",
-	"you-know",
-	"i-mean",
-	"actually",
-	"basically",
-	"literally",
-	"sort-of",
-	"kind-of",
-])
+// Only pure hesitation sounds. Words like "like" and "actually" are NOT
+// fillers in general — "I like dark mode" is a preference and "actually"
+// is a self-correction cue the downstream correction pass depends on.
+// Stripping them silently corrupted saved memories.
+const FILLERS = new Set(["um", "uh", "uhh", "umm", "er", "erm", "ah", "hmm"])
 
 const REPEAT_WORD = /\b(\w+)(?:\s+\1\b){1,}/gi
 const FALSE_START = /\b(\w{1,3})-\s+/g

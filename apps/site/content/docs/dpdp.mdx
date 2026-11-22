@@ -1,67 +1,62 @@
 ---
 title: DPDP & data handling
-description: How Smaran aligns with India's Digital Personal Data Protection Act, 2023.
+description: What Smaran stores, how to erase and export it, and how consent is recorded.
 section: Operations
 order: 2
 ---
 
-Smaran is built to be a lawful processor of personal data under India's DPDP Act. This page describes how — and where the responsibility lines fall between us and you.
+This page describes what the self-hosted Smaran API does with personal data and the endpoints that support India's Digital Personal Data Protection Act, 2023 (and GDPR). It is a technical description, not legal advice.
 
 ## Roles
 
-- **You** are the **Data Fiduciary** — the entity deciding what data gets collected and why.
-- **Smaran** is a **Data Processor** — we store and retrieve what you send us, on your instructions.
+When you run Smaran for your product, you are the **Data Fiduciary** (controller): you decide what is collected and why, and you own the notice and consent flow with your end users. Smaran stores, retrieves and deletes data on your instructions.
 
-If you're building a voice agent that captures customer information, you own the notice/consent flow with the end user. We give you the tools to store, retrieve, and delete that data on your instructions.
+## What is stored
 
-## Data flow
+Each memory carries `tenantId` (your organization), optional `userId` (a stable end-user id) and optional `sessionId` (one conversation), plus the cleaned text, its embedding vector, and metadata including the original text and any corrections. Every database query filters by the API key's tenant; this is covered by automated tests, including Postgres integration tests.
 
-Every memory carries three identifiers:
+Self-hosted data lives only in your own Postgres. The default embedding model runs inside the API process, so memory text is not sent to any third party unless you configure `EMBEDDER=openai` or an HTTP reranker.
 
-- `tenantId` — your organization
-- `sessionId` — one conversation or caller
-- `userId` (optional) — a stable end-user identifier
-
-All queries are scoped by `tenantId` at the database layer. Cross-tenant access is impossible by construction, not by policy.
-
-## Data residency
-
-Self-hosted: entirely on your infrastructure. Hosted API: Bangalore region only (`ap-south-1` Postgres, Cloudflare's Indian POPs for edge cache). We do not replicate data outside India.
-
-## Retention
-
-Defaults to indefinite storage — you're expected to delete when the underlying business purpose ends. To purge:
+## Right to erasure
 
 ```bash
-# Delete every memory for one session
-curl -X DELETE https://api.smaran.dev/v1/sessions/sess_abc \
-  -H "Authorization: Bearer sk_..."
-
-# Delete every memory for one end user across all their sessions
-curl -X DELETE https://api.smaran.dev/v1/users/u_alice \
-  -H "Authorization: Bearer sk_..."
+curl -X POST "$SMARAN_URL/v1/dpdp/right-to-forget" \
+  -H "Authorization: Bearer $SMARAN_API_KEY" -H "Content-Type: application/json" \
+  -d '{"userId":"u_alice"}'
 ```
 
-Both are hard deletes — the row is removed and the audit log records the deletion. The pgvector index is compacted on the next VACUUM.
+In one transaction this hard-deletes the user's memories, sessions and consolidated profile, and returns the counts. Consent records are retained (reported as `consentRecordsRetained`) because they are your evidence that processing was lawful. To delete a single memory, use `DELETE /v1/memories/:id`.
+
+## Right to access / portability
+
+```bash
+curl "$SMARAN_URL/v1/dpdp/export?userId=u_alice" -H "Authorization: Bearer $SMARAN_API_KEY"
+```
+
+Returns every memory (without embeddings), session, the profile and consent records for the user as JSON.
+
+## Consent
+
+```bash
+curl -X POST "$SMARAN_URL/v1/dpdp/consent" \
+  -H "Authorization: Bearer $SMARAN_API_KEY" -H "Content-Type: application/json" \
+  -d '{"userId":"u_alice","kind":"record","granted":true,"scope":"voice calls"}'
+```
+
+Each call appends a timestamped record (`kind`: `record`, `process`, `retain` or `share`) to an append-only consent log. A withdrawal is another record with `granted: false`; the most recent record per kind is the current state. Smaran records consent — your application must decide what to do when it is withdrawn (for example, call right-to-forget).
 
 ## Right to correction
 
-The DPDP Act requires you to let end users correct their data. Smaran's `memory_update` endpoint lets you overwrite the `text` field on any memory; the previous value goes to a `memory_history` table (retained 90 days for audit, then purged).
+A user can correct a fact by stating it again: a changed number, email or phone in the same sentence frame supersedes the old memory, and other updates are stored alongside it with the old one's confidence lowered. To remove a wrong fact outright, delete that memory.
 
-## Grievance officer
+## Retention
 
-For the hosted API, our grievance officer is reachable at `dpdp@smaran.dev` — SLA is 15 days per the Act.
+Memories are kept until you delete them. Delete per memory, or per user with right-to-forget, when the purpose ends.
 
-<Callout tone="warn" title="What Smaran does not do">
-We do not classify, redact, or filter PII before storage. If you don't want SSNs / Aadhaar / phone numbers in the graph, redact them at your edge before calling `save`. The SDK ships `redactPII(text)` for the common patterns — see the SDK reference.
+## Logs
+
+The API logs one JSON line per request (request id, path, status, latency, tenant id). It does not log request bodies, memory text, embeddings or SQL parameters, including when requests fail.
+
+<Callout tone="warn" title="No automatic PII redaction">
+Smaran stores the text you send. If identifiers such as Aadhaar or card numbers must not be stored, redact them before calling `save`.
 </Callout>
-
-## Sub-processors
-
-The hosted API uses:
-
-- **Supabase** (Postgres + pgvector) — data at rest, ap-south-1
-- **Cloudflare** (Workers, KV, Hyperdrive) — edge cache + HTTP layer
-- **Sentry** (self-hosted, ap-south-1) — error reporting, no memory text ever leaves
-
-Each is contractually a sub-processor under the DPDP Act. The current list is published in the tenant admin console and updated on any change.

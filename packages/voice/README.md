@@ -33,7 +33,9 @@ onPartial((text) => session.appendPartial(text))
 onFinal(() => session.commitTurn())
 
 // From your agent, on every turn:
-const { hits, tier, latencyMs } = await session.recall("what did they book last time?")
+const { hits, tier, latencyMs } = await session.recall(
+	"what did they book last time?",
+)
 ```
 
 `tier === "hot"` on a cache hit, `"session"` otherwise. Latency numbers are

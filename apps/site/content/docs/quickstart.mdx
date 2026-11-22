@@ -1,15 +1,15 @@
 ---
 title: Quickstart
-description: Zero to first saved memory in under a minute. One command, no account, no key.
+description: From clone to first saved and recalled memory in a few minutes. No account, no API key, no cost.
 section: Get started
 order: 2
 ---
 
-The fastest way to try Smaran is the local sandbox. It runs a full memory stack in-process — normalizer, self-correction, ephemeral vector store — on a single Bun command. No account, no API key, no cloud infra.
+The fastest way to try Smaran is the local sandbox: the full memory pipeline (cleaning, self-correction, semantic + keyword recall) running in one process with an in-memory store. It uses a free multilingual embedding model that runs on your CPU, so there are no API keys and no per-call costs.
 
 ## Prerequisites
 
-You need Bun `1.3.6` or newer and Node `20+`. Clone the repo, install once at the root, and you're ready.
+Bun `1.4.4` or newer. Clone the repo and install once at the root:
 
 ```bash
 git clone https://github.com/Ayushpani/smaran
@@ -18,49 +18,53 @@ bun install
 ```
 
 <Callout tone="note" title="Why at the root?">
-Smaran is a Bun workspace — dependencies get hoisted from the top-level `package.json`. Running `bun install` inside a nested app won't wire up the shared binaries.
+Smaran is a Bun workspace — the API imports the engine packages from `packages/`. Running `bun install` inside a nested app won't link them.
 </Callout>
 
 ## Start the sandbox
-
-From the repo root:
 
 ```bash
 bun run try
 ```
 
-You should see:
+The first start downloads the embedding model (~120 MB, cached in `.smaran/models`), then prints the sandbox URL and key:
 
 ```
-✓ sandbox on :8787 · in-process store
-✓ /v1/memories  /v1/recall  /v1/ingest/*
+embedder: Xenova/multilingual-e5-small loaded in 1059ms
+│ URL:     http://localhost:8787
+│ Key:     sk_local_dev
 ```
-
-That's it. There is now a full Smaran server running on `localhost:8787` with an in-memory store — perfect for prototyping without touching Postgres.
 
 ## Save your first memory
-
-In a second terminal, POST some text:
 
 ```bash
 curl -sX POST localhost:8787/v1/memories \
   -H "Authorization: Bearer sk_local_dev" \
   -H "Content-Type: application/json" \
-  -d '{"text":"confirm my order — one two three four, actually four three two one"}'
+  -d '{"userId":"u_alice","text":"confirm my order — one two three four, actually four three two one"}'
 ```
 
-The response:
+The stored memory (abridged):
 
 ```json
 {
-  "saved": true,
-  "text": "confirm my order four three two one",
-  "corrections": [{ "kind": "replace", "retracted": "one two three four", "kept": "four three two one" }],
-  "latency_ms": 1.8
+  "memories": [
+    {
+      "id": "mem_…",
+      "text": "confirm my order — four three two one",
+      "kind": "fact",
+      "metadata": {
+        "originalText": "confirm my order — one two three four, actually four three two one",
+        "corrections": [
+          { "kind": "patch", "retracted": "confirm my order — one two three four", "kept": "confirm my order — four three two one" }
+        ]
+      }
+    }
+  ]
 }
 ```
 
-Note what happened: the retraction cue (`actually`) was detected, the wrong value was **discarded before hitting storage**, and only the corrected form was persisted. This is the core promise of Smaran.
+The retraction cue (`actually`) was detected and the wrong value was replaced **before storage** — only the corrected form is ever recalled. What was dropped is kept in `metadata.corrections` for audit.
 
 ## Recall it
 
@@ -68,17 +72,17 @@ Note what happened: the retraction cue (`actually`) was detected, the wrong valu
 curl -sX POST localhost:8787/v1/recall \
   -H "Authorization: Bearer sk_local_dev" \
   -H "Content-Type: application/json" \
-  -d '{"query":"what did the caller confirm"}'
+  -d '{"userId":"u_alice","query":"which order did the caller confirm","topK":3}'
 ```
 
-Returns the corrected value, along with cosine similarity, source metadata, and a `latency_ms` under 3.
+Hits come back best first, each with the memory, a ranking `score` (for ordering only) and `latencyMs`.
 
 ## What next
 
-- Read [Voice concepts](/docs/voice) to understand how the pipeline handles partial + commit turns.
-- Wire the [TypeScript SDK](/docs/sdk) into your agent — same latency, better ergonomics.
-- Point production traffic at the hosted API when you're ready (docs coming soon).
+- [Voice concepts](/docs/voice) — streaming partials, commit, self-correction.
+- [TypeScript SDK](/docs/sdk) or the [REST API](/docs/api) from any language.
+- [Self-host](/docs/self-host) with Postgres for persistence.
 
 <Callout tone="info" title="Sandbox is ephemeral">
-Memories saved to the sandbox live only until you stop the process. For persistence, set `STORE=supabase` and provide a `DATABASE_URL` — see the self-host guide.
+Sandbox memories live only until the process stops. For persistence, run with `STORE=supabase` and a Postgres `DATABASE_URL` — see the self-host guide.
 </Callout>

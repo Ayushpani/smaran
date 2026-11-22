@@ -13,6 +13,11 @@
 		"check-types": {
 			"dependsOn": ["^check-types"]
 		},
+		"test": {
+			"dependsOn": ["^check-types"],
+			"cache": false,
+			"passThroughEnv": ["DATABASE_URL", "SKIP_MODEL_TESTS", "MODEL_CACHE_DIR"]
+		},
 		"dev": {
 			"cache": false,
 			"persistent": true

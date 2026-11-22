@@ -1,36 +1,38 @@
 ---
 title: Anthropic
-description: Wrap Anthropic Messages calls with Smaran recall + save.
+description: Recalled memory in the system prompt plus memory tools for Claude via the Messages API.
 section: Integrations
 order: 7
 ---
 
-The Anthropic adapter injects recalled memories into your system prompt and registers `memory_save` / `memory_recall` as native Anthropic tools.
-
-## Install
+`@smaranai/adapter-anthropic` translates Smaran into Anthropic Messages API shapes. It doesn't wrap the Anthropic client — you keep calling `messages.create` yourself.
 
 ```bash
-bun add @smaran/sdk @smaran/adapter-anthropic @anthropic-ai/sdk
+npm i @smaranai/sdk-ts @smaranai/adapter-anthropic @anthropic-ai/sdk
 ```
 
-## Wrap the call
+<Callout tone="note" title="First npm release pending">
+All `@smaranai/*` packages are built and smoke-tested for npm; until the first release, build them locally with `bun run scripts/build-package.ts packages/<name>`.
+</Callout>
+
+## Inject recalled memories
 
 ```ts
 import Anthropic from "@anthropic-ai/sdk"
-import { withRecalledContext, memoryTools } from "@smaran/adapter-anthropic"
-import { createMemoryClient } from "@smaran/sdk"
+import { Smaran } from "@smaranai/sdk-ts"
+import { withRecalledContext, memoryTools } from "@smaranai/adapter-anthropic"
 
-const smaran = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY })
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const smaran = new Smaran({ apiKey: process.env.SMARAN_API_KEY!, baseUrl: process.env.SMARAN_URL })
+const anthropic = new Anthropic()
 
-const { system, messages } = await withRecalledContext(smaran, {
-  system: "You are an empathetic voice assistant.",
-  messages: history,
-  sessionId: "sess_abc",
-})
+const { system, messages } = await withRecalledContext(
+  smaran,
+  { system: "You are a helpful voice assistant.", messages: history },
+  { userId: "u_alice", sessionId: "call_123", topK: 5 },
+)
 
 const res = await anthropic.messages.create({
-  model: "claude-sonnet-4",
+  model: "claude-sonnet-4-5",
   max_tokens: 1024,
   system,
   messages,
@@ -38,12 +40,21 @@ const res = await anthropic.messages.create({
 })
 ```
 
-`withRecalledContext` prepends `<recalled_memory>` XML blocks to the system prompt — Claude is trained to weight XML-fenced context strongly. `memoryTools()` returns the schema for `memory_save` and `memory_recall`; the SDK executes them when Claude invokes them.
+`withRecalledContext` recalls against the last user message and appends a `<recalled-memories>` block to `system`. With no matching memories, `system` is unchanged.
 
-## Tool-use loop
+## Handle tool calls
 
-If you're running a full agent loop, the adapter exports `runMemoryToolCall(smaran, block)` so you can handle `tool_use` blocks in your streaming handler.
+`memoryTools()` declares `memory_save` and `memory_recall`. Run the ones Claude calls and send the results back:
 
-<Callout tone="note" title="Model choice">
-Any Claude model with tool-use support works. Haiku is the fastest for latency-sensitive voice loops; Sonnet 4 for complex reasoning that still needs memory.
-</Callout>
+```ts
+import { handleToolUse, isMemoryToolUse } from "@smaranai/adapter-anthropic"
+
+const results = await Promise.all(
+  res.content
+    .filter(isMemoryToolUse)
+    .map((block) => handleToolUse(smaran, block, { userId: "u_alice", sessionId: "call_123" })),
+)
+// next turn: messages.push({ role: "user", content: results })
+```
+
+Each result is a ready-made `tool_result` block.

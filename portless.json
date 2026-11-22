@@ -1,15 +1,5 @@
 {
 	"apps": {
-		"apps/web": { "name": "app.dev.smaran", "script": "dev:app" },
-		"apps/mcp": { "name": "mcp.dev.smaran", "script": "dev:app" },
-		"apps/docs": {
-			"name": "docs.dev.smaran",
-			"script": "dev:app",
-			"appPort": 3003
-		},
-		"apps/memory-graph-playground": {
-			"name": "graph.dev.smaran",
-			"script": "dev:app"
-		}
+		"apps/mcp": { "name": "mcp.dev.smaran", "script": "dev:app" }
 	}
 }

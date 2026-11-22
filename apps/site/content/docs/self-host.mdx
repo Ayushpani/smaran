@@ -1,90 +1,107 @@
 ---
 title: Self-host
-description: Run Smaran on your own Postgres + your own Cloudflare Worker in under 20 minutes.
+description: Run Smaran on your own Postgres — with Docker Compose or directly with Bun.
 section: Operations
 order: 1
 ---
 
-Everything Smaran needs runs on infrastructure you already have. This guide gets you from zero to a self-hosted deployment on Supabase Postgres + Cloudflare Workers.
+Smaran is one Bun process plus Postgres with `pgvector`. The embedding model runs inside the process on CPU, so there's no external AI service to pay for.
 
 ## What you need
 
-- A Postgres 15+ with the `pgvector` extension. Supabase, Neon, Railway, or your own — doesn't matter.
-- A Cloudflare account with Workers + KV enabled.
-- Bun `1.3.6+` and Node `20+` locally.
-- ~20 minutes.
+- PostgreSQL 15+ with the `pgvector` and `pg_trgm` extensions (Supabase, Neon, RDS, or your own server).
+- Bun `1.4.4+`, or Docker.
+- About 1 GB RAM for the API process (models: ~120 MB embedder + ~23 MB reranker on disk).
 
-## 1 · Set up the database
+## Option A — Docker Compose
 
-Enable pgvector and run migrations:
+From the repo root:
 
 ```bash
-# In Supabase SQL editor or psql
-create extension if not exists vector;
+docker compose up -d
+docker compose run --rm migrate bun run keys tenant:create "My company"
 ```
 
-Then apply Smaran's schema:
+This starts Postgres + pgvector, applies the migrations, and runs the API on `http://localhost:8787`. The second command prints your first API key (shown once). The model is cached in a volume, so restarts don't re-download it. Set `POSTGRES_PASSWORD` in your environment for anything beyond local use.
+
+## Option B — Bun directly
 
 ```bash
-git clone https://github.com/Ayushpani/smaran
-cd smaran
+git clone https://github.com/Ayushpani/smaran && cd smaran
 bun install
-DATABASE_URL="postgresql://..." bunx drizzle-kit push --config packages/db/drizzle.config.ts
+
+export DATABASE_URL="postgresql://…"          # direct connection for migrations
+bun --filter @repo/db db:migrate                # tracked: each migration runs once
+bun run keys tenant:create "My company"         # prints the first API key
+
+STORE=supabase bun run apps/api/src/index.ts
 ```
 
-This creates the `tenants`, `api_keys`, `sessions`, `memories`, `entities`, and `relations` tables. The `memories.embedding` column is `vector(1536)` with an HNSW index tuned for balanced recall/speed.
+With Supabase, use the **transaction pooler** URL (port 6543) for the API and the direct URL (5432) for migrations.
 
-## 2 · Deploy the API
-
-The API is a Bun/Hono app. Ships as a Cloudflare Worker by default.
+## Managing keys
 
 ```bash
-cd apps/api
-cp wrangler.example.jsonc wrangler.jsonc
-# edit wrangler.jsonc with your DATABASE_URL (via Hyperdrive) and JWT_SECRET
-bun run deploy
+bun run keys tenant:list
+bun run keys key:create <tenantId> "backend"
+bun run keys key:list <tenantId>
+bun run keys key:revoke <keyId>     # takes effect within 30 s (auth cache)
 ```
 
-You now have a Worker URL like `https://smaran-api.your-account.workers.dev`.
+Only a SHA-256 hash of each key is stored.
 
-## 3 · Deploy the edge cache (optional but recommended)
+## Letting customers sign up
 
-The hot cache lives in Cloudflare KV. It's a separate Worker for cache-invalidation isolation.
+Set `SIGNUP_MODE` to let developers create their own accounts through `POST /v1/signup` or the site's `/signup` page (build the site with `NEXT_PUBLIC_SMARAN_API_URL` pointing at your API):
+
+- `invite` — recommended to start. Each signup needs a single-use code:
+  ```bash
+  bun run keys invite:create "Acme pilot"
+  ```
+- `open` — anyone can sign up, limited to `SIGNUP_PER_IP_PER_MINUTE` per client IP.
+
+New accounts get the free plan: `FREE_MEMORY_QUOTA` memories and `FREE_RATE_LIMIT_PER_MINUTE` requests a minute. Change one account's plan or limits (use `null` for unlimited / server default):
 
 ```bash
-cd apps/edge-recall
-bun run deploy
+bun run keys tenant:limits ten_… 1000000 3000 pro
 ```
 
-Point the API at it via `EDGE_CACHE_URL` env var. Reads under 1ms after this step; misses fall through to Postgres.
+Customers manage their own keys with `GET/POST /v1/keys` and `DELETE /v1/keys/:id`, and see usage at `GET /v1/usage`.
 
-## 4 · Issue an API key
+## Configuration
 
-Once the API is up, seed a tenant + key:
+| Variable | Default | |
+|---|---|---|
+| `STORE` | `supabase` | `supabase` (Postgres) or `memory` (sandbox, not persisted). |
+| `DATABASE_URL` | — | Required for `supabase`. |
+| `PORT` | `8787` | |
+| `EMBEDDER` | `local` | `local` (free, in-process), `openai` (any `/v1/embeddings` host), `hash` (tests only). |
+| `LOCAL_EMBED_MODEL` | `Xenova/multilingual-e5-small` | |
+| `MODEL_CACHE_DIR` | `.smaran/models` | |
+| `RERANKER` | `local` | `local` (free cross-encoder, English queries) or `none`. |
+| `RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | |
+| `RERANK_POOL` | `40` | Candidates the reranker re-orders; requests can override with `rerankPool`. |
+| `RATE_LIMIT_PER_MINUTE` | `600` | Per account, unless its plan sets one. Shared across instances in Postgres mode. |
+| `RATE_LIMIT_PER_IP_PER_MINUTE` | `1200` | Before authentication, per client IP (first `X-Forwarded-For` hop). |
+| `SIGNUP_MODE` | `off` | `off`, `invite` or `open`. |
+| `SIGNUP_PER_IP_PER_MINUTE` | `3` | |
+| `FREE_MEMORY_QUOTA` | `10000` | Memories per new self-serve account. |
+| `FREE_RATE_LIMIT_PER_MINUTE` | `120` | Requests a minute per new self-serve account. |
+| `SHARED_STATE` | `auto` | Where rate limits, voice turn buffers and live events live: `postgres` (default with `STORE=supabase`) or `memory`. |
+| `EVENTS_DATABASE_URL` | `DATABASE_URL` | Direct (session-mode) connection for `LISTEN/NOTIFY`. Transaction poolers such as Supabase's port 6543 don't support `LISTEN` — use the direct URL. |
+| `MAX_BODY_BYTES` | `262144` | |
+| `CORS_ORIGIN` | `*` | |
 
-```bash
-DATABASE_URL="..." bun run packages/db/seed.ts
-```
+Don't change the embedder on a database that already has memories — vectors from different models aren't comparable.
 
-This prints an `sk_...` key. Pass it as `SMARAN_API_KEY` to the SDK.
+## Operating it
 
-## 5 · Point the SDK at your host
+- **Health checks:** `/health` (liveness), `/ready` (database reachable; `503` otherwise).
+- **Logs:** one JSON line per request with request id, path, status, latency and tenant. Request bodies, memory text and SQL parameters are never logged.
+- **Shutdown:** `SIGTERM` stops accepting connections, drains in-flight requests and closes the pool.
+- **Backups:** back up Postgres as usual; every table is primary data except the model cache.
+- **Scaling:** run as many API instances as you like behind a load balancer. With `STORE=supabase`, rate limits, streaming-voice turn buffers and live session events are shared through Postgres (an unlogged counter table, an unlogged buffer table and `LISTEN/NOTIFY`), so instances behave as one — no Redis needed. Recall is an exact search within one user's memories, which stays fast for typical per-user volumes (thousands of memories).
 
-```ts
-const smaran = createMemoryClient({
-  apiKey: process.env.SMARAN_API_KEY,
-  baseUrl: "https://smaran-api.your-account.workers.dev",
-})
-```
+## Optional Cloudflare workers
 
-That's it. Same latency, same self-correction, same voice-turn semantics — running on your infra.
-
-<Callout tone="info" title="Alternatives">
-Not on Cloudflare? The API also runs as a plain Bun HTTP server (`bun run apps/api/src/index.ts`). You'll lose the edge cache but keep everything else. Set `STORE=supabase` and provide `DATABASE_URL`.
-</Callout>
-
-## Operational bits
-
-- **Backups**: Postgres does the heavy lifting. Take snapshots of the `memories` and `sessions` tables at your usual cadence. Everything else is derived.
-- **Scaling**: pgvector HNSW handles ~10M memories per tenant on modest hardware. Split into per-tenant schemas when you outgrow one instance.
-- **Monitoring**: The API exports Prometheus metrics at `/metrics` and Sentry breadcrumbs on the `SENTRY_DSN` env var.
+`apps/edge-recall` (a KV cache in front of `/v1/recall`) and `apps/reranker-worker` (a cross-encoder reranker on Workers AI) are optional and deployed separately with `wrangler deploy`.

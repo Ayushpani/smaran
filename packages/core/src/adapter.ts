@@ -45,12 +45,18 @@ export const MEMORY_TOOL_NAMES = {
 	recall: "memory_recall",
 } as const
 
+/** JSON Schema primitive types the memory tools use. */
+export type MemoryToolParamType = "string" | "number" | "integer" | "boolean"
+
 export interface MemoryToolSpec {
 	name: string
 	description: string
 	parameters: {
 		type: "object"
-		properties: Record<string, { type: string; description: string }>
+		properties: Record<
+			string,
+			{ type: MemoryToolParamType; description: string }
+		>
 		required: string[]
 	}
 }

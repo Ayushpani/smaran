@@ -7,6 +7,21 @@ jobs:
   quality-checks:
     name: Quality Checks
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smaran
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/smaran
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -16,13 +31,43 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.6
+          bun-version: 1.4.4
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run TypeScript type checking
-        run: bunx turbo run check-types --filter='@smaranai/ai-sdk' --filter='@smaranai/memory-graph'
+      - name: Type-check the memory engine
+        run: bunx turbo run check-types --filter='@repo/core' --filter='@repo/db' --filter='@repo/api' --filter='@repo/language' --filter='@repo/voice' --filter='@repo/models'
+
+      - name: Apply database migrations
+        run: bun --filter @repo/db db:migrate
+
+      - name: Run engine, Postgres, API and MCP tests
+        run: bun run test
 
       - name: Run Biome CI (format & lint on changed files)
         run: bunx biome ci --changed --since=origin/main --no-errors-on-unmatched
+
+  python-packages:
+    name: Python SDK and integrations
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - sdk-python
+          - openai-sdk-python
+          - agent-framework-python
+          - pipecat-sdk-python
+          - cartesia-sdk-python
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      # Integrations resolve the core SDK from this repo via [tool.uv.sources].
+      - name: Run tests
+        run: uv run --with pytest --with pytest-asyncio --with respx python -m pytest -q tests

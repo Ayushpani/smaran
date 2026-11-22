@@ -1,108 +1,64 @@
 import {
 	type AdapterScope,
+	type AutoRecallOptions,
 	buildRecalledContext,
 	handleMemoryToolCall,
 	type MemoryClient,
 	memoryToolSpecs,
 } from "@repo/core"
+import { type BaseMessage, SystemMessage } from "@langchain/core/messages"
+import { tool } from "@langchain/core/tools"
 
 /**
- * LangGraph.js helpers. Three entry points:
- *   memoryToolNodes(memory, scope) — Object of async node handlers keyed
- *                                    by tool name. Drop into a graph as
- *                                    conditional edges from the LLM node.
- *   recallNode(memory, opts)       — A ready-made StateGraph node that
- *                                    performs silent recall on state.
- *   memoryToolSchemas()            — Provider-agnostic tool descriptors
- *                                    for binding to the model.
+ * LangGraph.js / LangChain.js integration (tested against @langchain/core
+ * 1.x and @langchain/langgraph 1.x).
+ *
+ *   memoryTools(memory, scope)  — LangChain tools for `ToolNode`,
+ *                                 `createReactAgent`, or `model.bindTools`.
+ *   withRecalledContext(memory, messages, opts) — prepend recalled
+ *                                 memories as a SystemMessage (use it in a
+ *                                 node or as createReactAgent's `prompt`).
  */
-
-export interface LangGraphState {
-	messages: Array<{
-		role: "system" | "user" | "assistant" | "tool"
-		content: string
-		[k: string]: unknown
-	}>
-	[k: string]: unknown
+export function memoryTools(client: MemoryClient, scope: AdapterScope) {
+	return memoryToolSpecs.map((spec) =>
+		tool(
+			async (input: Record<string, unknown>) => {
+				const res = await handleMemoryToolCall(
+					client,
+					{ name: spec.name, input },
+					scope,
+				)
+				return res.content
+			},
+			{
+				name: spec.name,
+				description: spec.description,
+				schema: spec.parameters,
+			},
+		),
+	)
 }
 
-export interface LangGraphToolSchema {
-	name: string
-	description: string
-	parameters: {
-		type: "object"
-		properties: Record<string, { type: string; description: string }>
-		required: string[]
-	}
-}
-
-export function memoryToolSchemas(): LangGraphToolSchema[] {
-	return memoryToolSpecs.map((spec) => ({
-		name: spec.name,
-		description: spec.description,
-		parameters: spec.parameters,
-	}))
-}
-
-export type NodeHandler = (
-	state: LangGraphState,
-) => Promise<Partial<LangGraphState>>
-
-export function memoryToolNodes(
+/**
+ * Recall against the last human message and return the messages with a
+ * SystemMessage of recalled memories in front (merged into an existing
+ * leading SystemMessage). Unchanged when nothing matches.
+ */
+export async function withRecalledContext(
 	client: MemoryClient,
-	scope: AdapterScope,
-): Record<string, NodeHandler> {
-	const nodes: Record<string, NodeHandler> = {}
-	for (const spec of memoryToolSpecs) {
-		nodes[spec.name] = async (state) => {
-			const last = state.messages[state.messages.length - 1] as
-				| (Record<string, unknown> & {
-						args?: Record<string, unknown>
-						tool_call?: { args?: Record<string, unknown> }
-				  })
-				| undefined
-			const args = (last?.args ?? last?.tool_call?.args ?? {}) as Record<
-				string,
-				unknown
-			>
-			const res = await handleMemoryToolCall(
-				client,
-				{ name: spec.name, input: args },
-				scope,
-			)
-			return {
-				messages: [
-					...state.messages,
-					{ role: "tool", content: res.content, name: spec.name },
-				],
-			}
-		}
+	messages: BaseMessage[],
+	opts: AutoRecallOptions = {},
+): Promise<BaseMessage[]> {
+	const last = [...messages].reverse().find((m) => m.getType() === "human")
+	const recalled = await buildRecalledContext(
+		client,
+		last ? last.text : "",
+		opts,
+	)
+	if (!recalled) return messages
+	const [head, ...rest] = messages
+	if (head && head.getType() === "system") {
+		return [new SystemMessage(`${head.text}\n\n${recalled}`), ...rest]
 	}
-	return nodes
-}
-
-export function recallNode(
-	client: MemoryClient,
-	opts: AdapterScope & { topK?: number } = {},
-): NodeHandler {
-	return async (state) => {
-		const lastUser = [...state.messages]
-			.reverse()
-			.find((m) => m.role === "user")
-		const lastText = lastUser?.content ?? ""
-		const recalled = await buildRecalledContext(client, lastText, opts)
-		if (!recalled) return {}
-		const first = state.messages[0]
-		if (first?.role === "system") {
-			return {
-				messages: [
-					{ ...first, content: `${first.content}\n\n${recalled}` },
-					...state.messages.slice(1),
-				],
-			}
-		}
-		return {
-			messages: [{ role: "system", content: recalled }, ...state.messages],
-		}
-	}
+	return [new SystemMessage(recalled), ...messages]
 }

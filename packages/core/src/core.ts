@@ -1,7 +1,14 @@
 import { createClassifier, type Classifier } from "./classify.ts"
-import { applyConfidence, reciprocalRankFusion, rankByDecay } from "./fusion.ts"
+import {
+	applyConfidence,
+	decayScore,
+	rankByDecay,
+	reciprocalRankFusion,
+} from "./fusion.ts"
 import type { Embedder } from "./embedder.ts"
 import type { Consolidator } from "./consolidator.ts"
+import { classifyRevision, type RevisionKind } from "./revision.ts"
+import { createInProcessEventBus, type EventBus } from "./events.ts"
 import type {
 	Memory,
 	MemoryEvent,
@@ -19,16 +26,31 @@ import type {
  */
 export interface MemoryStore {
 	insertMemories(rows: MemoryRow[]): Promise<Memory[]>
-	deleteMemory(tenantId: string, id: MemoryId): Promise<void>
+	/** Deletes a tenant's memory. Returns the deleted row's sessionId (null if it had none), or undefined if no such row existed for this tenant. */
+	deleteMemory(
+		tenantId: string,
+		id: MemoryId,
+	): Promise<{ sessionId: SessionId | null } | undefined>
 	/** Dense (vector similarity) channel. */
 	search(params: SearchParams): Promise<SearchRow[]>
 	/** Keyword (lexical/exact-token) channel — language-neutral tokenization at the store level. */
 	searchKeyword(params: KeywordSearchParams): Promise<SearchRow[]>
-	/** Closes out the prior memory's validity window and links `newId` as its replacement, in one transaction. */
+	/**
+	 * Links `newId` as the successor of `oldId` (sets newId.supersedesId).
+	 * With `closeOld` (the default) it also closes the old memory's validity
+	 * window, so default recall stops returning it — in one transaction.
+	 */
 	reviseMemory(
 		tenantId: string,
 		oldId: MemoryId,
 		newId: MemoryId,
+		opts?: { closeOld?: boolean },
+	): Promise<void>
+	/** Adds evidence to a memory's Beta(alpha, beta) belief: corroboration raises alpha, contradiction raises beta. */
+	adjustBelief(
+		tenantId: string,
+		id: MemoryId,
+		delta: { alpha?: number; beta?: number },
 	): Promise<void>
 	/** Bumps accessCount/lastAccessedAt for memories returned by a recall — best-effort, feeds future decay ranking. */
 	touchAccess(tenantId: string, ids: MemoryId[]): Promise<void>
@@ -82,7 +104,8 @@ export interface MemoryCore {
 	save(input: SaveInput): Promise<Memory[]>
 	recall(query: RecallQuery): Promise<RecallResult>
 	forget(tenantId: string, id: MemoryId): Promise<void>
-	subscribe(sessionId: SessionId): AsyncIterable<MemoryEvent>
+	/** Events are scoped to (tenantId, sessionId) — a tenant can never observe another tenant's session, even with a colliding sessionId. */
+	subscribe(tenantId: string, sessionId: SessionId): AsyncIterable<MemoryEvent>
 }
 
 export interface CoreDeps {
@@ -91,16 +114,23 @@ export interface CoreDeps {
 	consolidator: Consolidator
 	/** Optional entity-graph channel for RRF fusion. Sandbox/in-memory mode omits it — dense+keyword still fuse. */
 	graph?: GraphChannel
+	/** Where memory events go. Defaults to in-process; use a shared bus (e.g. Postgres LISTEN/NOTIFY) when running several API instances. */
+	events?: EventBus
 	newId?: () => string
 	now?: () => Date
 }
 
-// Cosine distance threshold below which a new memory is treated as a
-// revision of an existing current one rather than an independent fact.
-// Deliberately tight (cosine similarity > 0.92) — this is meant to catch
-// near-restatements/light edits of the same slot ("913" replacing "13" in
-// an otherwise-identical sentence), not merely-related facts.
-const SLOT_MATCH_DISTANCE = 0.08
+// How many nearest existing memories (per channel) to check when deciding
+// whether a new statement duplicates, replaces or relates to one of them.
+const REVISION_CANDIDATES = 5
+// Max relative boost recency can give a hit (tie-breaker, not a ranking signal).
+const RECENCY_WEIGHT = 0.05
+const REVISION_RANK: Record<RevisionKind, number> = {
+	none: 0,
+	related: 1,
+	replace: 2,
+	duplicate: 3,
+}
 
 export function createCore(deps: CoreDeps): MemoryCore {
 	const { store, embedder, consolidator, graph } = deps
@@ -108,7 +138,17 @@ export function createCore(deps: CoreDeps): MemoryCore {
 	const now = deps.now ?? (() => new Date())
 	const classifier: Classifier = createClassifier(embedder)
 
-	const bus = new SessionBus()
+	const bus: EventBus = deps.events ?? createInProcessEventBus()
+	// Events are best-effort: a broker hiccup must never fail or delay a save.
+	const emit = (
+		tenantId: string,
+		sessionId: string | null,
+		event: MemoryEvent,
+	) => {
+		void Promise.resolve()
+			.then(() => bus.publish(tenantId, sessionId, event))
+			.catch(() => {})
+	}
 
 	async function save(input: SaveInput): Promise<Memory[]> {
 		const candidates = await consolidator.consolidate(input)
@@ -119,56 +159,98 @@ export function createCore(deps: CoreDeps): MemoryCore {
 		const kinds = await Promise.all(
 			candidates.map((c, i) => c.kind ?? classifier.classify(vecs[i]!)),
 		)
-		const rows: MemoryRow[] = candidates.map((c, i) => ({
+		const userId = input.userId ?? null
+
+		// Relate each candidate to the user's existing CURRENT memories.
+		// Candidates come from both the dense and keyword channels so this
+		// works under any embedder; the decision itself is lexical (see
+		// revision.ts — similarity alone can't separate "updated value"
+		// from "different fact").
+		const relations = await Promise.all(
+			candidates.map(async (c, i) => {
+				if (input.revises) return null
+				const scope = {
+					tenantId: input.tenantId,
+					userId,
+					sessionId: input.sessionId ?? null,
+					topK: REVISION_CANDIDATES,
+					includeCrossSession: true,
+				}
+				const [dense, keyword] = await Promise.all([
+					store.search({ ...scope, queryVec: vecs[i]! }),
+					store.searchKeyword({ ...scope, queryText: c.text }),
+				])
+				let best: { memory: Memory; kind: RevisionKind } | null = null
+				for (const r of [...dense, ...keyword]) {
+					// Revision only ever applies within the exact same user —
+					// a null userId must not match other users' memories.
+					if (r.memory.userId !== userId) continue
+					const kind = classifyRevision(r.memory.text, c.text)
+					if (kind === "none") continue
+					if (!best || REVISION_RANK[kind] > REVISION_RANK[best.kind]) {
+						best = { memory: r.memory, kind }
+					}
+				}
+				return best
+			}),
+		)
+
+		const toInsert: number[] = []
+		const result: Array<Memory | undefined> = new Array(candidates.length)
+		for (let i = 0; i < candidates.length; i++) {
+			const rel = relations[i]
+			if (rel?.kind === "duplicate") {
+				// Restating a known fact is evidence for it, not a new row.
+				await store.adjustBelief(input.tenantId, rel.memory.id, { alpha: 1 })
+				result[i] = {
+					...rel.memory,
+					confidenceAlpha: rel.memory.confidenceAlpha + 1,
+				}
+			} else {
+				toInsert.push(i)
+			}
+		}
+
+		const rows: MemoryRow[] = toInsert.map((i) => ({
 			id: newId(),
 			tenantId: input.tenantId,
-			userId: input.userId ?? null,
+			userId,
 			sessionId: input.sessionId ?? null,
-			text: c.text,
+			text: candidates[i]!.text,
 			kind: kinds[i]!,
 			source: input.source ?? "text",
 			embedding: vecs[i]!,
 			metadata: input.metadata ?? {},
 		}))
-		const memories = await store.insertMemories(rows)
+		const inserted = rows.length > 0 ? await store.insertMemories(rows) : []
 
-		// Bi-temporal supersession: close out the revised memory's validity
-		// window and link it, in one store-level transaction. Only the
-		// first inserted row participates — `revises` targets one prior
-		// fact, not a batch.
-		if (input.revises && memories[0]) {
-			await store.reviseMemory(input.tenantId, input.revises, memories[0].id)
-		} else if (memories[0] && vecs[0]) {
-			// Auto-detect cross-session slot revision: if this new memory is
-			// near-duplicate (by embedding) of an existing CURRENT memory for
-			// the same user, treat it as a correction rather than a second,
-			// contradictory "fact" sitting alongside the old one. This is
-			// what makes multi-session recall correct without the caller
-			// having to track memory IDs across sessions themselves.
-			const near = await store.search({
-				tenantId: input.tenantId,
-				userId: input.userId ?? null,
-				sessionId: input.sessionId ?? null,
-				queryVec: vecs[0],
-				topK: 2,
-				includeCrossSession: true,
-			})
-			const match = near.find(
-				(r) =>
-					r.memory.id !== memories[0]?.id && r.distance < SLOT_MATCH_DISTANCE,
-			)
-			if (match) {
-				await store.reviseMemory(
-					input.tenantId,
-					match.memory.id,
-					memories[0].id,
-				)
+		for (let j = 0; j < inserted.length; j++) {
+			const i = toInsert[j]!
+			let memory = inserted[j]!
+			if (input.revises && j === 0) {
+				// Explicit caller-supplied revision: always a hard replace.
+				await store.reviseMemory(input.tenantId, input.revises, memory.id)
+				memory = { ...memory, supersedesId: input.revises }
+			} else {
+				const rel = relations[i]
+				if (rel?.kind === "replace") {
+					await store.reviseMemory(input.tenantId, rel.memory.id, memory.id)
+					memory = { ...memory, supersedesId: rel.memory.id }
+				} else if (rel?.kind === "related") {
+					await store.reviseMemory(input.tenantId, rel.memory.id, memory.id, {
+						closeOld: false,
+					})
+					await store.adjustBelief(input.tenantId, rel.memory.id, { beta: 1 })
+					memory = { ...memory, supersedesId: rel.memory.id }
+				}
 			}
+			result[i] = memory
 		}
+		const memories = result.filter((m): m is Memory => m !== undefined)
 
 		const t = now().toISOString()
-		for (const m of memories) {
-			bus.publish(m.sessionId, {
+		for (const m of inserted) {
+			emit(input.tenantId, m.sessionId, {
 				type: "memory.saved",
 				memory: { ...m, createdAt: t, updatedAt: t },
 			})
@@ -178,7 +260,10 @@ export function createCore(deps: CoreDeps): MemoryCore {
 
 	async function recall(query: RecallQuery): Promise<RecallResult> {
 		const t0 = performance.now()
-		const queryVec = await embedder.embed(query.query)
+		// Asymmetric models (e.g. e5) embed queries differently from passages.
+		const queryVec = await (embedder.embedQuery
+			? embedder.embedQuery(query.query)
+			: embedder.embed(query.query))
 		const t1 = performance.now()
 
 		const topK = query.topK ?? 8
@@ -191,9 +276,8 @@ export function createCore(deps: CoreDeps): MemoryCore {
 			asOf,
 		}
 
-		// Four channels, fetched in parallel: dense (vector), keyword
-		// (lexical), graph (entity traversal, if wired), temporal (decay
-		// over whatever the other three surfaced — no extra query needed).
+		// Three retrieval channels in parallel: dense (vector), keyword
+		// (lexical, IDF-weighted), graph (entity traversal, if wired).
 		const [denseRows, keywordRows, graphIds] = await Promise.all([
 			store.search({ ...baseParams, queryVec, topK: topK * 3 }),
 			store.searchKeyword({
@@ -218,30 +302,38 @@ export function createCore(deps: CoreDeps): MemoryCore {
 			now(),
 		)
 
-		const fused = reciprocalRankFusion([
-			denseRank,
-			keywordRank,
-			graphRank,
-			temporalRank,
-		])
-
+		// Relevance channels only. Recency is deliberately NOT an equal
+		// RRF vote: measured on LoCoMo it halved hit@1 (recently-touched
+		// memories outranked ones that answer the query). It survives as a
+		// small multiplicative tie-breaker below.
+		const fused = reciprocalRankFusion([denseRank, keywordRank, graphRank])
+		const t = now()
 		const ranked = Array.from(fused.entries())
 			.map(([id, rrfScore]) => {
 				const row = byId.get(id)!
-				const belief = {
-					alpha: row.memory.confidenceAlpha,
-					beta: row.memory.confidenceBeta,
-				}
-				return { row, score: applyConfidence(rrfScore, belief) }
+				const m = row.memory
+				const belief = { alpha: m.confidenceAlpha, beta: m.confidenceBeta }
+				const recency = decayScore(
+					m.lastAccessedAt ?? m.createdAt,
+					m.accessCount,
+					t,
+				)
+				const score =
+					applyConfidence(rrfScore, belief) *
+					(1 + RECENCY_WEIGHT * Math.min(recency, 1))
+				return { row, score }
 			})
 			.sort((a, b) => b.score - a.score)
 			.slice(0, topK)
 
 		if (ranked.length > 0) {
-			await store.touchAccess(
-				query.tenantId,
-				ranked.map((r) => r.row.memory.id),
-			)
+			// Best-effort usage stats — never make the caller wait on a write.
+			void store
+				.touchAccess(
+					query.tenantId,
+					ranked.map((r) => r.row.memory.id),
+				)
+				.catch(() => {})
 		}
 
 		const hits = ranked.map(({ row, score }) => ({
@@ -269,66 +361,28 @@ export function createCore(deps: CoreDeps): MemoryCore {
 	}
 
 	async function forget(tenantId: string, id: MemoryId): Promise<void> {
-		await store.deleteMemory(tenantId, id)
-		bus.publish(null, { type: "memory.forgotten", id })
+		const deleted = await store.deleteMemory(tenantId, id)
+		if (deleted) {
+			emit(tenantId, deleted.sessionId, { type: "memory.forgotten", id })
+		}
 	}
 
-	function subscribe(sessionId: SessionId): AsyncIterable<MemoryEvent> {
-		return bus.subscribe(sessionId)
+	function subscribe(
+		tenantId: string,
+		sessionId: SessionId,
+	): AsyncIterable<MemoryEvent> {
+		return bus.subscribe(tenantId, sessionId)
 	}
 
 	return { save, recall, forget, subscribe }
 }
 
-class SessionBus {
-	private listeners = new Map<string | null, Set<(e: MemoryEvent) => void>>()
-	publish(sessionId: string | null, event: MemoryEvent) {
-		for (const key of [sessionId, null]) {
-			const set = this.listeners.get(key)
-			if (set) for (const l of set) l(event)
-		}
-	}
-	subscribe(sessionId: string | null): AsyncIterable<MemoryEvent> {
-		const queue: MemoryEvent[] = []
-		let resolveNext: ((v: IteratorResult<MemoryEvent>) => void) | null = null
-		const listener = (e: MemoryEvent) => {
-			if (resolveNext) {
-				const r = resolveNext
-				resolveNext = null
-				r({ value: e, done: false })
-			} else {
-				queue.push(e)
-			}
-		}
-		let set = this.listeners.get(sessionId)
-		if (!set) {
-			set = new Set()
-			this.listeners.set(sessionId, set)
-		}
-		set.add(listener)
-
-		return {
-			[Symbol.asyncIterator]: () => ({
-				next: () => {
-					if (queue.length > 0) {
-						return Promise.resolve({
-							value: queue.shift()!,
-							done: false as const,
-						})
-					}
-					return new Promise<IteratorResult<MemoryEvent>>((res) => {
-						resolveNext = res
-					})
-				},
-				return: () => {
-					set?.delete(listener)
-					return Promise.resolve({ value: undefined, done: true })
-				},
-			}),
-		}
-	}
-}
-
+/**
+ * In-process pub/sub keyed by (tenant, session). Memories without a
+ * session have no subscribers. Single-process only: a multi-instance
+ * deployment needs a shared broker (e.g. Postgres LISTEN/NOTIFY or Redis)
+ * behind this same interface.
+ */
 function cryptoId(): string {
 	const bytes = new Uint8Array(16)
 	crypto.getRandomValues(bytes)

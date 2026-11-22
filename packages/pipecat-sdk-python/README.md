@@ -39,13 +39,13 @@ pipeline = Pipeline([
 
 ### Parameters
 
-| Parameter    | Type        | Required | Description                                          |
-| ------------ | ----------- | -------- | ----------------------------------------------------- |
-| `user_id`    | str         | **Yes**  | User identifier memories are scoped to                |
-| `session_id` | str         | No       | Session/conversation ID for grouping saved memories    |
-| `api_key`    | str         | No       | Smaran API key (or set `SMARAN_API_KEY` env var)       |
-| `base_url`   | str         | No       | Smaran API base URL (or set `SMARAN_URL` env var)      |
-| `params`     | InputParams | No       | Advanced configuration                                 |
+| Parameter    | Type        | Required | Description                                         |
+| ------------ | ----------- | -------- | --------------------------------------------------- |
+| `user_id`    | str         | **Yes**  | User identifier memories are scoped to              |
+| `session_id` | str         | No       | Session/conversation ID for grouping saved memories |
+| `api_key`    | str         | No       | Smaran API key (or set `SMARAN_API_KEY` env var)    |
+| `base_url`   | str         | No       | Smaran API base URL (or set `SMARAN_URL` env var)   |
+| `params`     | InputParams | No       | Advanced configuration                              |
 
 ### Advanced Configuration
 

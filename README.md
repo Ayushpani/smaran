@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="apps/web/public/logo.png" width="360" alt="Smaran" />
+  <img src=".github/assets/logo.png" width="360" alt="Smaran" />
 
   <h3>Voice-native memory infrastructure for AI agents</h3>
 
@@ -72,45 +72,45 @@ The API needs one env var (`DATABASE_URL`) — a Supabase free-tier Postgres wor
 
 ### Core
 
-| Package | Purpose |
-| --- | --- |
-| [`@repo/core`](packages/core) | Provider-agnostic memory engine + shared adapter contract. Ships `HashEmbedder`, `HeuristicConsolidator`, and `InMemoryStore` so it runs without any external dependency. |
-| [`@repo/db`](packages/db) | Drizzle schema + `MemoryStore` for Postgres+pgvector. Multi-hop graph store. Idempotent migrations. |
-| [`@repo/voice`](packages/voice) | Live-call primitives: `StreamingSession`, `HotCache` (TTL LRU), `scrubAsrText`, barge-in `abortTurn`/`rollbackLastTurn`. |
-| [`@repo/language`](packages/language) | Script/language detection across Latin + 8 Indian scripts, Hindi/Hinglish filler removal, heuristic NER, session-scoped coreference. |
-| [`@repo/data-pipeline`](packages/data-pipeline) | PII scrubbing (Aadhaar/PAN/GSTIN/UPI) + training-pair extraction for future distilled models. |
-| [`@repo/models`](packages/models) | Reranker contract with heuristic + HTTP + WASM slots. |
-| [`@smaranai/sdk-ts`](packages/sdk-ts) | Zero-dependency TypeScript client. |
+| Package                                         | Purpose                                                                                                                                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@repo/core`](packages/core)                   | Provider-agnostic memory engine + shared adapter contract. Ships `HashEmbedder`, `HeuristicConsolidator`, and `InMemoryStore` so it runs without any external dependency. |
+| [`@repo/db`](packages/db)                       | Drizzle schema + `MemoryStore` for Postgres+pgvector. Multi-hop graph store. Idempotent migrations.                                                                       |
+| [`@repo/voice`](packages/voice)                 | Live-call primitives: `StreamingSession`, `HotCache` (TTL LRU), `scrubAsrText`, barge-in `abortTurn`/`rollbackLastTurn`.                                                  |
+| [`@repo/language`](packages/language)           | Script/language detection across Latin + 8 Indian scripts, Hindi/Hinglish filler removal, heuristic NER, session-scoped coreference.                                      |
+| [`@repo/data-pipeline`](packages/data-pipeline) | PII scrubbing (Aadhaar/PAN/GSTIN/UPI) + training-pair extraction for future distilled models.                                                                             |
+| [`@repo/models`](packages/models)               | Reranker contract with heuristic + HTTP + WASM slots.                                                                                                                     |
+| [`@smaranai/sdk-ts`](packages/sdk-ts)           | Zero-dependency TypeScript client.                                                                                                                                        |
 
 ### LLM & agent-framework adapters
 
-| Package | Coverage |
-| --- | --- |
-| [`@smaranai/adapter-anthropic`](packages/adapter-anthropic) | Anthropic Messages + Claude Agent SDK |
-| [`@smaranai/adapter-openai`](packages/adapter-openai) | OpenAI Chat/Responses/Agents/Codex + Groq/Together/DeepSeek/xAI/Fireworks/Ollama/LM Studio/vLLM |
-| [`@smaranai/adapter-google`](packages/adapter-google) | Google Gemini + Agent Kit |
-| [`@smaranai/adapter-vercel-ai`](packages/adapter-vercel-ai) | Vercel AI SDK |
-| [`@smaranai/adapter-langgraph`](packages/adapter-langgraph) | LangGraph.js |
-| [`@smaranai/adapter-mastra`](packages/adapter-mastra) | Mastra |
+| Package                                                     | Coverage                                                              |
+| ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| [`@smaranai/adapter-anthropic`](packages/adapter-anthropic) | Anthropic Messages API (tested: `@anthropic-ai/sdk` 1.x)              |
+| [`@smaranai/adapter-openai`](packages/adapter-openai)       | OpenAI Chat Completions + compatible endpoints (tested: `openai` 7.x) |
+| [`@smaranai/adapter-google`](packages/adapter-google)       | Google Gemini (tested: `@google/genai` 3.x)                           |
+| [`@smaranai/adapter-vercel-ai`](packages/adapter-vercel-ai) | Vercel AI SDK (tested: `ai` 7.x)                                      |
+| [`@smaranai/adapter-langgraph`](packages/adapter-langgraph) | LangGraph.js / LangChain.js (tested: `@langchain/core` 1.x)           |
+| [`@smaranai/adapter-mastra`](packages/adapter-mastra)       | Mastra (tested: `@mastra/core` 1.x)                                   |
 
-Every adapter exposes both **model-driven tools** (the model calls `memory_save` / `memory_recall` itself) and **silent context injection** (`withRecalledContext` prepends relevant memories to the system prompt). Compose both on the same call.
+Every adapter exposes **model-driven tools** (the model calls `memory_save` / `memory_recall` itself); all except Mastra also offer **silent context injection** (`withRecalledContext`). Each is tested against the real framework package, including a tool-call round trip.
 
 ### Voice-platform adapters
 
-| Package | Coverage |
-| --- | --- |
-| [`@smaranai/adapter-vapi`](packages/adapter-vapi) | Vapi server-URL webhook (functions + transcripts) |
-| [`@smaranai/adapter-livekit`](packages/adapter-livekit) | LiveKit Agents (Pipecat by shape) |
+| Package                                                 | Coverage                                          |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| [`@smaranai/adapter-vapi`](packages/adapter-vapi)       | Vapi server-URL webhook (functions + transcripts) |
+| [`@smaranai/adapter-livekit`](packages/adapter-livekit) | LiveKit Agents (Node)                             |
 
 ### Applications
 
-| App | Purpose |
-| --- | --- |
-| [`apps/api`](apps/api) | The memory API. REST + SSE. Sandbox mode (`STORE=memory`) or persistent (`STORE=supabase`). |
-| [`apps/mcp`](apps/mcp) | MCP server — plugs into Claude Desktop / Claude Code / Cursor / Windsurf. |
-| [`apps/edge-recall`](apps/edge-recall) | Cloudflare Worker: KV hot cache tier in front of the origin. |
-| [`apps/starter-vapi`](apps/starter-vapi) | ~90-line runnable Vapi voice-agent-with-memory template. |
-| [`apps/reranker-worker`](apps/reranker-worker) | BAAI cross-encoder as a CF Worker. |
+| App                                            | Purpose                                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [`apps/api`](apps/api)                         | The memory API. REST + SSE. Sandbox mode (`STORE=memory`) or persistent (`STORE=supabase`). |
+| [`apps/mcp`](apps/mcp)                         | MCP server — plugs into Claude Desktop / Claude Code / Cursor / Windsurf.                   |
+| [`apps/edge-recall`](apps/edge-recall)         | Cloudflare Worker: KV hot cache tier in front of the origin.                                |
+| [`apps/starter-vapi`](apps/starter-vapi)       | ~90-line runnable Vapi voice-agent-with-memory template.                                    |
+| [`apps/reranker-worker`](apps/reranker-worker) | BAAI cross-encoder as a CF Worker.                                                          |
 
 Full endpoint reference: [`DOCS.md`](DOCS.md).
 
@@ -121,13 +121,17 @@ Full endpoint reference: [`DOCS.md`](DOCS.md).
 ```ts
 // Anthropic Claude — model decides when to save/recall
 import Anthropic from "@anthropic-ai/sdk"
-import { handleToolUse, memoryTools, withRecalledContext } from "@smaranai/adapter-anthropic"
+import {
+	handleToolUse,
+	memoryTools,
+	withRecalledContext,
+} from "@smaranai/adapter-anthropic"
 
 const res = await anthropic.messages.create({
-  model: "claude-…",
-  system: (await withRecalledContext(memory, { messages }, scope)).system,
-  tools: memoryTools(),
-  messages,
+	model: "claude-…",
+	system: (await withRecalledContext(memory, { messages }, scope)).system,
+	tools: memoryTools(),
+	messages,
 })
 ```
 
@@ -136,11 +140,17 @@ const res = await anthropic.messages.create({
 import { handleVapiEvent, memoryFunctions } from "@smaranai/adapter-vapi"
 
 app.post("/vapi", async (c) => {
-  const result = await handleVapiEvent(await c.req.json().then(b => b.message), {
-    memory, session, sessionId: callId, userId
-  })
-  if (result.response) return c.json(result.response)
-  return c.body(null, 204)
+	const result = await handleVapiEvent(
+		await c.req.json().then((b) => b.message),
+		{
+			memory,
+			session,
+			sessionId: callId,
+			userId,
+		},
+	)
+	if (result.response) return c.json(result.response)
+	return c.body(null, 204)
 })
 ```
 
@@ -153,6 +163,7 @@ More examples in each adapter's README.
 Smaran is a working codebase, not yet a validated product. Being explicit about what's proven vs. what's still on the roadmap:
 
 **Working end-to-end today** (verified in a live sandbox):
+
 - Save, recall, forget, streaming ingest, DPDP endpoints, graph traverse
 - Recall = 4-channel reciprocal rank fusion (dense vector + keyword + entity graph + recency/frequency decay), not plain vector search
 - Bi-temporal memory: point-in-time recall (`asOf`), auto-supersession of corrected facts across sessions
@@ -161,16 +172,18 @@ Smaran is a working codebase, not yet a validated product. Being explicit about 
 - Provider adapters for Anthropic, OpenAI, Gemini, Vercel AI SDK, LangGraph, Mastra, Vapi, LiveKit, MCP
 - Hindi/Hinglish detection + filler stripping, entity extraction, session coreference
 - Barge-in rollback, hot-cache tier, speculative prefetch
-- Per-tenant reranker AND embedder registry with atomic activation
+- Per-tenant reranker registry (`/v1/models`)
 - Cloudflare Worker edge tier
 - Sandbox mode with no external dependencies
 
 **Shipped but not proven yet**:
-- Recall quality — the default `HashEmbedder` is a deterministic stub; real embeddings work via `EMBEDDER=openai` (any `/v1/embeddings` host, including free-tier Ollama), but published benchmark numbers do not yet exist.
-- Latency — architecturally supported (sub-200ms with in-region hosting), not yet measured on real voice-agent traffic.
+
+- Recall quality — measured on the public LoCoMo benchmark with the default free local models (embedder + cross-encoder reranker): the right memory is ranked first for 51.4% of questions and is in the top 10 for 77.3%. See [RESULTS.md](RESULTS.md); end-to-end answer accuracy with an LLM is not yet measured.
+- Latency — recall p50 ≈ 140 ms with reranking (tunable per request with `rerankPool`), ≈ 15 ms without (`rerank: false`), in-process on a 4-vCPU machine (RESULTS.md); not yet measured with Postgres over a network or on real voice-agent traffic.
 - Semantic (embedding-based) self-correction — a language-agnostic replacement for the current English-only retraction cue list exists (`applySelfCorrectionSemantic`) but regressed under the sandbox's stub embedder in testing, so it isn't wired into the live route yet. Needs validation against a real embedder first.
 
 **On the roadmap** (planned, not yet code):
+
 - Distilled voice-tuned embedder + reranker (needs collected call data to train)
 - Public playground UI
 - Managed hosted tier + pricing

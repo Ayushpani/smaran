@@ -1,4 +1,5 @@
 import {
+	type MemoryToolParamType,
 	type AdapterScope,
 	handleMemoryToolCall,
 	MEMORY_TOOL_NAMES,
@@ -19,7 +20,10 @@ export interface VapiFunctionSpec {
 	description: string
 	parameters: {
 		type: "object"
-		properties: Record<string, { type: string; description: string }>
+		properties: Record<
+			string,
+			{ type: MemoryToolParamType; description: string }
+		>
 		required: string[]
 	}
 }

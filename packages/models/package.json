@@ -10,9 +10,11 @@
 		}
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "bun test test"
 	},
 	"dependencies": {
+		"@huggingface/transformers": "^3.8.1",
 		"@repo/language": "workspace:*"
 	},
 	"devDependencies": {

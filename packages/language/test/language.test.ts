@@ -1,0 +1,111 @@
+import { describe, expect, test } from "bun:test"
+import { applySelfCorrection, normalizeCodeSwitched } from "../src/index.ts"
+
+describe("applySelfCorrection", () => {
+	const cases: Array<[string, string]> = [
+		[
+			"i live in powai, no... actual trikutta towers powai, room number 13... sorry 913",
+			"trikutta towers powai, room number 913",
+		],
+		["my name is Ayush, sorry Ayushpani", "Ayushpani"],
+		["my phone is 98765, wait no, 987654321", "my phone is 987654321"],
+	]
+	for (const [input, expected] of cases) {
+		test(input, () => {
+			expect(applySelfCorrection(input).text).toBe(expected)
+		})
+	}
+
+	test("a cue followed by a full new clause keeps both facts", () => {
+		const r = applySelfCorrection(
+			"I love sushi. Sorry, I have a meeting at 5pm",
+		)
+		expect(r.text).toContain("I love sushi")
+		expect(r.text).toContain("I have a meeting at 5pm")
+	})
+
+	test("'no' inside ordinary speech is not a cue", () => {
+		const input = "no one is home, my number is 98200 12345"
+		expect(applySelfCorrection(input).text).toBe(input)
+	})
+})
+
+describe("normalizeCodeSwitched", () => {
+	test("romanized Hinglish is flagged as code-switched", () => {
+		for (const t of [
+			"mera ghar hai",
+			"mera ghar bahut accha hai Andheri mein",
+		]) {
+			const r = normalizeCodeSwitched(t)
+			expect(r.wasCodeSwitched).toBe(true)
+			expect(r.primary).toBe("mixed")
+		}
+	})
+
+	test("plain English stays English", () => {
+		const r = normalizeCodeSwitched("I prefer window seats on long flights")
+		expect(r.wasCodeSwitched).toBe(false)
+		expect(r.primary).toBe("en")
+	})
+})
+
+describe("applySelfCorrection — cue position", () => {
+	test("mid-sentence cue with a long correction replaces the prior clause", () => {
+		const r = applySelfCorrection(
+			"mera address hai andheri, actually bandra west, flat number 21, no 12",
+		)
+		expect(r.text).not.toContain("andheri")
+		expect(r.text).toContain("bandra west")
+		expect(r.text).toContain("12")
+	})
+
+	test("sentence-initial cue with a short fragment is still a correction", () => {
+		expect(
+			applySelfCorrection("I live in Powai. Actually, Andheri.").text,
+		).toBe("Andheri")
+	})
+})
+
+describe("applySelfCorrection — spoken numbers", () => {
+	test("patches only the spoken value, keeping the clause", () => {
+		expect(
+			applySelfCorrection(
+				"confirm my order — one two three four, actually four three two one",
+			).text,
+		).toBe("confirm my order — four three two one")
+	})
+
+	test("romanized Hindi number words count as values", () => {
+		expect(
+			applySelfCorrection("mera pin hai ek do teen, nahi teen do ek").text,
+		).not.toContain("ek do teen")
+	})
+})
+
+test("a clause-initial 'no' before a number corrects it; 'no problem' does not", () => {
+	expect(applySelfCorrection("flat number 21, no 12").text).toBe(
+		"flat number 12",
+	)
+	const polite = "thanks for the help, no problem"
+	expect(applySelfCorrection(polite).text).toBe(polite)
+})
+
+test("an '. and …' clause adds a fact instead of correcting the previous one", () => {
+	const r = applySelfCorrection(
+		"my email is old@example.com. actually new@example.com. and my extension is 42",
+	)
+	expect(r.text).toBe("my email is new@example.com, my extension is 42")
+})
+
+test("common English words don't make English read as Hinglish", () => {
+	for (const t of [
+		"Did Melanie make the black and white bowl in the photo?",
+		"What did the posters at the poetry reading say?",
+		"Is the main office open, ya think?",
+	]) {
+		expect(normalizeCodeSwitched(t).primary).toBe("en")
+	}
+	expect(normalizeCodeSwitched("mera ghar Andheri mein hai").primary).toBe(
+		"mixed",
+	)
+})

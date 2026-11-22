@@ -1,108 +1,138 @@
 ---
 title: TypeScript SDK
-description: createMemoryClient, save, recall — copy-paste ready for any Node runtime.
+description: Typed, zero-dependency client for Node, Bun, Deno, Workers and browsers — with retries built in.
 section: SDK
 order: 1
 ---
 
-The Smaran SDK ships as `@smaran/sdk` (previously `@smaranai/sdk-ts` inside the monorepo). It works in Node, Bun, Edge runtimes, and Cloudflare Workers with zero peer dependencies.
+`@smaranai/sdk-ts` is a single-file, zero-dependency client for the Smaran API. It runs anywhere `fetch` exists: Node 18+, Bun, Deno, Cloudflare Workers, Vercel Edge and browsers.
 
 ## Install
 
 ```bash
-bun add @smaran/sdk
-# or
-npm i @smaran/sdk
+npm i @smaranai/sdk-ts      # or: bun add / pnpm add / yarn add
 ```
+
+<Callout tone="note" title="First npm release pending">
+The packages are built and smoke-tested for npm (see `scripts/npm-smoke`); the first release goes out with the publish workflow. Until then, build one locally with `bun run scripts/build-package.ts packages/sdk-ts` and install `packages/sdk-ts/dist-publish`, or copy `packages/sdk-ts/src/index.ts` — it has no dependencies. Any other language can use the [REST API](/docs/api) or generate a client from `GET /openapi.json`.
+</Callout>
 
 ## Create a client
 
 ```ts
-import { createMemoryClient } from "@smaran/sdk"
+import { Smaran } from "@smaranai/sdk-ts"
 
-const smaran = createMemoryClient({
-  apiKey: process.env.SMARAN_API_KEY,
-  // Optional — defaults to https://api.smaran.dev
-  baseUrl: process.env.SMARAN_BASE_URL,
+const smaran = new Smaran({
+  apiKey: process.env.SMARAN_API_KEY!, // "sk_local_dev" for the local sandbox
+  baseUrl: "http://localhost:8787",    // your deployment's URL
+  // optional: timeoutMs (default 10000), maxRetries (default 2), fetch
 })
 ```
-
-Use `sk_local_dev` as the key when hitting the sandbox on `localhost:8787`.
 
 ## Save
 
 ```ts
-const result = await smaran.save({
-  text: "confirm my order — one two three four, actually four three two one",
-  sessionId: "sess_abc",
+const memories = await smaran.save({
   userId: "u_alice",
+  sessionId: "call_123",
+  text: "my room number is 13... sorry 913",
   source: "voice",
+  metadata: { channel: "phone" },
 })
-
-console.log(result)
-// {
-//   saved: true,
-//   text: "confirm my order four three two one",
-//   memoryId: "mem_...",
-//   corrections: [{ kind: "replace", retracted: "one two three four", kept: "four three two one" }],
-//   latency_ms: 1.8,
-// }
+// memories[0].text === "my room number is 913"
 ```
 
-### Options
+`save` returns the stored memories. Use `saveDetailed` when you need to know that nothing was stored and why (pure confirmation questions such as "is that 13 or 913?" are skipped):
+
+```ts
+const { memories, skipped } = await smaran.saveDetailed({ userId: "u_alice", text })
+```
+
+Restating a known fact doesn't create a duplicate — the existing memory is returned with its confidence raised.
 
 | Field | Type | Notes |
 |---|---|---|
-| `text` | `string` | Required. The utterance, transcript, or free-form fact to save. |
-| `sessionId` | `string` | Recommended. Scopes recall — one caller, one session ID. |
-| `userId` | `string?` | Optional. Cross-session tie-breaker. |
-| `source` | `"voice" \| "text" \| "system"` | Hints downstream processing. `voice` runs the self-correction pass. |
-| `metadata` | `Record<string, unknown>?` | Free-form. Stored alongside the memory, returned on recall. |
+| `text` | `string` | Required. Up to 50,000 characters. |
+| `userId` | `string?` | Recommended. Recall and revision are scoped per user. |
+| `sessionId` | `string?` | One conversation or call. |
+| `source` | `"text" \| "voice"` | Defaults to `"text"`. |
+| `metadata` | `Record<string, unknown>?` | Stored with the memory, returned on recall. |
 
 ## Recall
 
 ```ts
-const hits = await smaran.recall({
-  query: "what did the caller confirm",
-  sessionId: "sess_abc",
+const { hits, latencyMs } = await smaran.recall({
+  userId: "u_alice",
+  query: "where does the caller live",
   topK: 5,
-  includeCrossSession: false,
 })
+for (const h of hits) console.log(h.memory.text, h.score)
+```
 
-for (const h of hits) {
-  console.log(h.memory.text, h.score)
+Options: `sessionId`, `includeCrossSession` (default `true`), `rerank` (default `true`; pass `false` for the ~15 ms fast path), `rerankPool` (default 40; 20 for lower latency, 60 for higher recall), and `asOf` (ISO timestamp) for point-in-time recall. `score` is for ordering only — don't threshold on it.
+
+## Forget
+
+```ts
+await smaran.forget(memoryId)
+```
+
+## Streaming voice turns
+
+```ts
+// as ASR partials arrive (overlapping prefixes are merged)
+await smaran.ingestPartial({ sessionId: "call_123", text: partialText })
+// when the turn ends: clean, self-correct and save once
+const r = await smaran.ingestCommit({ sessionId: "call_123", userId: "u_alice" })
+// r.saved, r.text, r.memories — or r.reason when skipped
+```
+
+## Persistent-mode extras
+
+Available when the API runs with Postgres (`STORE=supabase`):
+
+```ts
+await smaran.profile("u_alice")            // consolidated profile or null
+await smaran.consolidateProfile("u_alice") // recompute it
+await smaran.exportUser("u_alice")         // everything stored about the user
+await smaran.forgetUser("u_alice")         // erase memories, sessions, profile
+await smaran.recordConsent({ userId: "u_alice", kind: "record", granted: true })
+```
+
+## Accounts
+
+```ts
+// On a server with SIGNUP_MODE=open|invite:
+const { apiKey } = await Smaran.signup("https://api.example.com", { name: "Acme", invite: "inv_…" })
+
+const smaran = new Smaran({ apiKey, baseUrl: "https://api.example.com" })
+await smaran.usage()               // plan, memory count, limits
+await smaran.createKey("backend")  // { keyId, apiKey } — shown once
+await smaran.listKeys()
+await smaran.revokeKey(keyId)      // the last active key can't be revoked
+```
+
+## Live events
+
+```ts
+for await (const event of smaran.subscribe("call_123", abortController.signal)) {
+  // { type: "memory.saved", memory } | { type: "memory.forgotten", id }
 }
 ```
 
-`recall` returns an array of `{ memory, score }` — memory carries `text`, `id`, `sessionId`, `metadata`, and `createdAt`; `score` is the cosine similarity from the vector store.
+## Errors and retries
 
-### Streaming partials
-
-For live voice, don't wait for the turn to end:
+Rate-limit (429) and server (5xx) responses and network errors are retried with exponential backoff, honouring `Retry-After`. Anything else throws a `SmaranError`:
 
 ```ts
-await smaran.partial({ sessionId: "sess_abc", text: partialText })
-// ...called repeatedly as ASR streams
-await smaran.commit({ sessionId: "sess_abc", source: "voice" })
-```
+import { SmaranError } from "@smaranai/sdk-ts"
 
-`partial` is safe to call every 100ms. `commit` fires self-correction and writes to storage exactly once per turn.
-
-## Error handling
-
-Every SDK method throws on network or auth failures. Wrap in try/catch if you want to surface the error to your agent instead of failing the turn:
-
-```ts
 try {
-  await smaran.save({ text, sessionId })
+  await smaran.save({ userId, text })
 } catch (err) {
-  console.error("smaran save failed", err)
-  // fall back to no-op — the agent turn still completes
+  if (err instanceof SmaranError) {
+    console.error(err.status, err.code, err.requestId) // e.g. 400 "invalid_request" "…"
+  }
+  // A failed save shouldn't fail the agent's turn.
 }
 ```
-
-Save failures should be non-fatal. Losing one memory beats dropping the call.
-
-<Callout tone="warn" title="Sandbox vs production">
-The local sandbox uses an in-memory store — restart the process and everything's gone. For persistence, either set `STORE=supabase` locally or point the SDK at the hosted API.
-</Callout>

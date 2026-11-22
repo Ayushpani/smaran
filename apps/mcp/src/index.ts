@@ -41,7 +41,7 @@ app.use("*", async (c, next) => {
 app.get("/", (c) => {
 	return c.json({
 		name: "smaran-mcp",
-		version: "4.0.0",
+		version: "0.1.0",
 		description: "Give your AI a memory",
 		docs: "https://github.com/Ayushpani/smaran",
 	})
@@ -52,7 +52,8 @@ const mcpHandler = SmaranMCP.serve("/mcp", {
 	corsOptions: {
 		origin: "*",
 		methods: "GET, POST, DELETE, OPTIONS",
-		headers: "Content-Type, Authorization, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID",
+		headers:
+			"Content-Type, Authorization, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID",
 	},
 })
 
@@ -68,7 +69,10 @@ const handleMcpRequest = async (c: Context<{ Bindings: Bindings }>) => {
 		return new Response(
 			JSON.stringify({
 				jsonrpc: "2.0",
-				error: { code: -32000, message: "Unauthorized: missing Smaran API key" },
+				error: {
+					code: -32000,
+					message: "Unauthorized: missing Smaran API key",
+				},
 				id: null,
 			}),
 			{

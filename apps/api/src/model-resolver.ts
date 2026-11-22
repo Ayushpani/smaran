@@ -19,7 +19,8 @@ import { and, desc, eq, isNull, or } from "drizzle-orm"
 
 export interface ResolvedRerankers {
 	tenantId: string
-	reranker: Reranker
+	/** null when no reranker is configured (RERANKER=none and no registry row). */
+	reranker: Reranker | null
 	source: "tenant" | "platform" | "builtin"
 }
 
@@ -74,10 +75,9 @@ async function resolveRow(
 	)
 }
 
-export function createModelResolver(db: Db) {
+export function createModelResolver(db: Db, builtInReranker: Reranker | null) {
 	const rerankerCache = new Map<string, CacheEntry<ResolvedRerankers>>()
 	const embedderCache = new Map<string, CacheEntry<ResolvedEmbedder>>()
-	const builtInReranker = new HeuristicReranker()
 	const builtInEmbedder = new HashEmbedder()
 
 	async function resolve(tenantId: string): Promise<ResolvedRerankers> {
@@ -87,7 +87,7 @@ export function createModelResolver(db: Db) {
 
 		const active = await resolveRow(db, "reranker", tenantId)
 
-		let reranker: Reranker = builtInReranker
+		let reranker: Reranker | null = builtInReranker
 		let source: ResolvedRerankers["source"] = "builtin"
 		if (active) {
 			source = active.tenantId === tenantId ? "tenant" : "platform"
@@ -98,6 +98,8 @@ export function createModelResolver(db: Db) {
 					model: cfg.model,
 					apiKey: cfg.apiKey,
 				})
+			} else if (active.provider === "heuristic") {
+				reranker = new HeuristicReranker()
 			} else if (active.provider === "builtin") {
 				reranker = builtInReranker
 			}

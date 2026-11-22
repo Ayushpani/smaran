@@ -1,0 +1,51 @@
+# Full self-hosted stack: Postgres + pgvector, one-shot migrations, API.
+#   docker compose up -d
+#   docker compose run --rm migrate bun run keys tenant:create "My company"
+# Then call http://localhost:8787 with the printed key.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: smaran
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smaran}
+      POSTGRES_DB: smaran
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smaran -d smaran"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    command: ["bun", "run", "packages/db/src/migrate.ts"]
+    environment:
+      DATABASE_URL: postgres://smaran:${POSTGRES_PASSWORD:-smaran}@db:5432/smaran
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    environment:
+      STORE: supabase
+      DATABASE_URL: postgres://smaran:${POSTGRES_PASSWORD:-smaran}@db:5432/smaran
+      EMBEDDER: local
+      MODEL_CACHE_DIR: /data/models
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-600}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    ports:
+      - "8787:8787"
+    volumes:
+      - models:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  models:

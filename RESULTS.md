@@ -1,8 +1,105 @@
-# Smaran — measured latency
+# Smaran — measured results
 
-Every latency figure quoted anywhere on the site (landing, docs, README) resolves to a run in this file. If it isn't here, it isn't real.
+Every number quoted anywhere on the site, README or docs must resolve to a run in this file, reproducible from a script in this repo. If it isn't here, it isn't real.
 
-## Methodology
+## Current engine
+
+**Hardware:** 4 vCPU Intel Xeon @ 2.10GHz, 15 GB RAM, no GPU, single process, API and client on the same machine (no network hop).
+**Config:** `STORE=memory`, `EMBEDDER=local` (Xenova/multilingual-e5-small, q8, CPU) unless noted.
+
+### LoCoMo retrieval (public long-term memory benchmark)
+
+`scripts/benchmark-locomo.ts` saves every dialogue turn of the 10 LoCoMo conversations (5,882 turns) through `POST /v1/memories`, then asks every question through `POST /v1/recall` with `topK=10`. A question is a hit@k if one of its labelled evidence turns is in the top k; "full evidence" needs all of them. Category 5 (unanswerable by design) is excluded. This measures retrieval only, not end-to-end answer accuracy (that needs an LLM judge).
+
+**Default configuration** (local cross-encoder reranking on, `RERANKER=local`, `RERANK_POOL=40`):
+
+| Category          | Questions | Hit@1     | Hit@5     | Hit@10    | Full evidence@10 | MRR@10    |
+| ----------------- | --------- | --------- | --------- | --------- | ---------------- | --------- |
+| multi-hop         | 282       | 42.9%     | 69.9%     | 74.8%     | 21.6%            | 0.545     |
+| temporal          | 321       | 59.2%     | 76.9%     | 80.7%     | 73.8%            | 0.661     |
+| open-domain       | 92        | 21.7%     | 43.5%     | 47.8%     | 33.7%            | 0.307     |
+| single-hop        | 841       | 54.5%     | 75.1%     | 80.0%     | 77.3%            | 0.632     |
+| **All (cat 1-4)** | **1536**  | **51.4%** | **72.7%** | **77.3%** | **63.7%**        | **0.603** |
+
+Save p50 12.4 ms / p95 24.4 ms (n=5882). Recall p50 142 ms / p95 179 ms (n=1536), most of it reranking.
+
+**Rerank pool size** (in-process harness, all 1536 questions; `rerankPool` per request or `RERANK_POOL`):
+
+| Pool             | Hit@1 | Hit@10 | Full evidence@10 | Multi-hop full evidence | Time / query |
+| ---------------- | ----- | ------ | ---------------- | ----------------------- | ------------ |
+| 20               | 52.1% | 75.3%  | 62.1%            | 18.1%                   | 94 ms        |
+| 30               | 52.3% | 76.8%  | 63.5%            | 19.5%                   | 116 ms       |
+| **40 (default)** | 52.5% | 78.8%  | 65.2%            | 21.6%                   | 138 ms       |
+| 60               | 52.5% | 80.1%  | 66.5%            | 24.8%                   | 191 ms       |
+
+Diversifying the top 10 did **not** help multi-hop questions (evidence spread across sessions) — it was measured and rejected. Pool 40 with: session-diverse ordering (≤2 per session first) 74.6% hit@10 / 20.9% multi-hop full; MMR λ=0.7 76.0% / 20.2%; MMR λ=0.85 76.6% / 20.9%; versus plain reranking 78.8% / 21.6%. The limit is how many candidates the reranker sees, not redundancy. Previous default (pool 20) via the API: hit@1 51.0%, hit@10 74.7%, recall p50 98 ms.
+
+**Fast path** (`rerank: false` per request, or `RERANKER=none`): Hit@1 38.0%, Hit@5 62.3%, Hit@10 71.3%, full evidence 59.0%, MRR 0.485; recall p50 14.8 ms / p95 22.3 ms.
+
+**Reranker selection** (3 conversations, 383 questions, re-ordering the top 20 fused candidates):
+
+| Reranker (license)                                | Hit@1     | Hit@10    | MRR       | Added p50 |
+| ------------------------------------------------- | --------- | --------- | --------- | --------- |
+| none                                              | 36.3%     | 71.0%     | 0.468     | —         |
+| ms-marco-MiniLM-L-6-v2 (Apache-2.0) — **default** | **53.5%** | **78.1%** | **0.619** | ~60 ms    |
+| mmarco-mMiniLMv2-L12 multilingual (Apache-2.0)    | 51.7%     | 77.3%     | 0.606     | ~170 ms   |
+| bge-reranker-base (MIT), pool 30                  | 45.2%     | 73.9%     | 0.551     | ~500 ms   |
+| blending reranker order with fused order (w=0.3)  | 48.3%     | 77.5%     | 0.579     | ~60 ms    |
+| multilingual-e5-base embedder + MiniLM rerank     | 52.7%     | 79.9%     | 0.621     | ~60 ms    |
+
+The default cross-encoder is English-only. On a 26-question English/Hindi/Hinglish set, the fused ranking, the English reranker and the multilingual reranker all scored 20/26 at hit@1 — no gain — so reranking is applied only to English queries over mostly-English candidates; Hindi and Hinglish keep the fused order. Scoring candidates in length-sorted batches of 5 (instead of one padded batch) cut reranker p95 from 107 ms to 65 ms with identical output.
+
+**Same benchmark on Postgres** (`STORE=supabase`: local PostgreSQL 16 + pgvector 0.6 on the same machine, migrations 0000–0005), default configuration: Hit@1 50.5%, Hit@5 70.2%, **Hit@10 74.3%**, full evidence 61.1%, MRR 0.589. **Save p50 19.4 ms / p95 33.9 ms; recall p50 109 ms / p95 137 ms.** Fast path (no rerank): Hit@10 71.5%, recall p50 29.9 ms / p95 42.6 ms. Real deployments add the network round trip to the database.
+
+Postgres fixes behind those numbers (before → after, full run): keyword search OR-ed and IDF-weighted in a single lexeme join (it previously required every query word to match, and the first IDF version re-parsed queries per row); dense search made exact within the user's scope instead of HNSW post-filtering; the unused HNSW index dropped; recall no longer waits for its access-count write. Save p95 299 → 38 ms, recall p95 108 → 43 ms.
+
+Same in-memory run with `EMBEDDER=hash` (no semantic model, keyword channel only effectively): Hit@1 4.6%, Hit@10 52.3%, MRR 0.178.
+
+How the engine got here, each step measured on conversation 1 (150 questions, hit@1 / hit@10):
+
+| Change                                                                                    | Hit@1 | Hit@10 |
+| ----------------------------------------------------------------------------------------- | ----- | ------ |
+| Starting point: recency as an equal RRF vote, overlap keyword scoring, sentence splitting | 9.9%  | 45.4%  |
+| Recency demoted to a tie-breaker, IDF-weighted keyword scoring                            | 25.0% | 60.5%  |
+| Messages kept whole (only text > 500 chars is chunked)                                    | 31.6% | 68.4%  |
+| Local cross-encoder reranks the top 20 (English)                                          | 48.0% | 73.3%  |
+
+Reproduce (Postgres: set `STORE=supabase DATABASE_URL=…`, run `bun --filter @repo/db db:migrate` and `db:seed`, pass the seeded key as `SMARAN_API_KEY`):
+
+```bash
+bun run try                              # terminal 1 (fresh process — no prior data)
+bun run scripts/benchmark-locomo.ts      # terminal 2
+```
+
+### LoCoMo answer accuracy (LLM-as-judge) — not yet measured
+
+Retrieval hit rates above are not the number most memory products publish; those report end-to-end answer accuracy graded by an LLM. `scripts/benchmark-locomo-qa.ts` runs that protocol against this API: recall (top 10) → an answer model replies from the recalled memories only (each shown with its session date) → a judge model labels the reply CORRECT/WRONG against the gold answer. It writes a per-category table plus a JSON file with every question's context, answer and verdict for audit.
+
+No figure is published here yet: it needs a capable LLM. The pipeline has only been verified end to end against a mock endpoint (whose score is meaningless). To produce a real, comparable number at no per-call cost, serve an open model on a rented GPU with any OpenAI-compatible server, for example:
+
+```bash
+# On the GPU machine
+vllm serve Qwen/Qwen2.5-14B-Instruct --port 8000
+
+# Here, against a fresh API
+bun run try
+ANSWER_BASE_URL=http://<gpu-host>:8000/v1 ANSWER_MODEL=Qwen/Qwen2.5-14B-Instruct \
+  bun run scripts/benchmark-locomo-qa.ts --concurrency=16
+```
+
+Use the same answer and judge models when comparing against other systems — the judge model changes the score.
+
+### Voice-turn suite
+
+`scripts/benchmark-voice-turns.ts`, 7 cases (self-correction, Hinglish, confirmation questions, refinement across turns): **7/7**. Save p50 5.2 ms, recall p50 4.0 ms.
+
+---
+
+## Historical runs (previous engine — do not quote)
+
+The runs below predate the current engine (recall fusion, keyword scoring, chunking and the embedder all changed). The audio suite's `scripts/audio-samples/` was never committed, so those runs can't be reproduced from this repo.
+
+### Historical methodology
 
 Two suites already in the repo:
 
@@ -11,12 +108,12 @@ Two suites already in the repo:
 
 Each is run against four **config combinations** so the numbers can be attributed to the right layer:
 
-| Run | Store | Embedder | Purpose |
-|---|---|---|---|
-| A | `memory` | `hash` | sandbox baseline — isolates pipeline overhead |
-| B | `memory` | `openai:text-embedding-3-small` | isolates embedder network cost |
-| C | `supabase` | `hash` | isolates DB round-trip cost |
-| D | `supabase` | `openai:text-embedding-3-small` | **production shape — the one that matters** |
+| Run | Store      | Embedder                        | Purpose                                       |
+| --- | ---------- | ------------------------------- | --------------------------------------------- |
+| A   | `memory`   | `hash`                          | sandbox baseline — isolates pipeline overhead |
+| B   | `memory`   | `openai:text-embedding-3-small` | isolates embedder network cost                |
+| C   | `supabase` | `hash`                          | isolates DB round-trip cost                   |
+| D   | `supabase` | `openai:text-embedding-3-small` | **production shape — the one that matters**   |
 
 Reproduce locally:
 
@@ -38,7 +135,7 @@ bun run scripts/benchmark-audio.ts scripts/audio-samples
 
 ---
 
-## Run A — sandbox baseline
+### Run A — sandbox baseline
 
 - **Store**: `memory` (InMemoryStore, ephemeral)
 - **Embedder**: `hash` (HashEmbedder — deterministic, 0ms compute)
@@ -75,7 +172,7 @@ from the original Run A and predate the RRF/bi-temporal work. Flagged
 
 ---
 
-## Run B — embedder isolation
+### Run B — embedder isolation
 
 - **Store**: `memory`
 - **Embedder**: `openai:text-embedding-3-small`
@@ -99,7 +196,7 @@ Same asr numbers as Run A (ASR is upstream).
 
 ---
 
-## Run C — DB isolation
+### Run C — DB isolation
 
 - **Store**: `supabase` (Postgres + pgvector, HNSW index)
 - **Embedder**: `hash`
@@ -155,7 +252,7 @@ deployment mistake, not a Smaran number.
 
 ---
 
-## Run D — production shape (the one that matters)
+### Run D — production shape (the one that matters)
 
 - **Store**: `supabase`
 - **Embedder**: `openai:text-embedding-3-small`
@@ -177,7 +274,7 @@ deployment mistake, not a Smaran number.
 
 ---
 
-## Interpreting the audio accuracy numbers
+### Interpreting the audio accuracy numbers
 
 The audio suite's accuracy is dominated by ASR quality, not memory-layer accuracy. Whisper-tiny mishears `987654321` as `9-8-7-6-5-4-3-2-1`, `Ayushpani` as `Aayush Pani`, `bandra` as `Bhandra`. Smaran saves what it's given; the memory layer's job is to preserve and retrieve that value, not to correct ASR. Every "fail" in the audio suite is an ASR miss, not a Smaran failure.
 

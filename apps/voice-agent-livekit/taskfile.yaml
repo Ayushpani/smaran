@@ -74,7 +74,7 @@ tasks:
     status:
       - test -z "$LIVEKIT_SANDBOX_ID"
     vars:
-      SANDBOX_URL: 'https://{{ .LIVEKIT_SANDBOX_ID }}.sandbox.livekit.io'
+      SANDBOX_URL: "https://{{ .LIVEKIT_SANDBOX_ID }}.sandbox.livekit.io"
       SANDBOX_LINK: '{{ print "\x1b]8;;" .SANDBOX_URL "\x1b\\\x1b[36;4m" .SANDBOX_URL "\x1b[0m\x1b]8;;\x1b\\" }}'
     cmds:
       - echo 'To chat with your running agent, visit:'

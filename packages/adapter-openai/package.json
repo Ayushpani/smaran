@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-openai",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -10,12 +9,26 @@
 		}
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit -p tsconfig.test.json",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@repo/core": "workspace:*"
 	},
 	"devDependencies": {
+		"openai": "7.62.0",
 		"typescript": "5.8.3"
-	}
+	},
+	"peerDependencies": {
+		"openai": ">=4"
+	},
+	"description": "Smaran memory for OpenAI Chat Completions and compatible APIs: tools, tool-call handling, recalled context.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

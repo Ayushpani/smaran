@@ -9,6 +9,7 @@ Email: [ayushpanigrahi84@gmail.com](mailto:ayushpanigrahi84@gmail.com)
 with the subject line `[smaran-security]`.
 
 Include:
+
 - What the vulnerability is
 - Steps to reproduce
 - What version / commit you tested on

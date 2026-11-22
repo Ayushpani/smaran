@@ -1,56 +1,82 @@
-import { zValidator } from "@hono/zod-validator"
+import { validate } from "../http.ts"
 import type { MemoryCore } from "@repo/core"
 import { Hono } from "hono"
 import { z } from "zod"
 import { auth } from "../auth.ts"
+import { shouldRerank } from "@repo/models"
 import type { ModelResolver } from "../model-resolver.ts"
 
-const recallInput = z.object({
+export const recallInput = z.object({
 	query: z.string().min(1).max(4_000),
 	userId: z.string().max(200).optional(),
 	sessionId: z.string().max(200).optional(),
 	topK: z.number().int().min(1).max(50).default(8),
 	includeCrossSession: z.boolean().default(true),
-	rerank: z.boolean().default(false),
+	/** Re-order with the reranker when one is configured (default on). */
+	rerank: z.boolean().default(true),
+	/**
+	 * Candidates the reranker re-orders (server default RERANK_POOL=40).
+	 * Larger = better recall, slower: on LoCoMo 20→60 raises hit@10
+	 * 75.3%→80.1% at ~94→191 ms per query.
+	 */
+	rerankPool: z.number().int().min(1).max(100).optional(),
 	/** Point-in-time recall: ISO timestamp, defaults to now (current facts only). */
 	asOf: z.string().datetime().optional(),
 })
 
-export function recallRouter(core: MemoryCore, resolver: ModelResolver) {
-	return new Hono().post("/", zValidator("json", recallInput), async (c) => {
+export function recallRouter(
+	core: MemoryCore,
+	resolver: ModelResolver,
+	rerankPool = 20,
+) {
+	return new Hono().post("/", validate("json", recallInput), async (c) => {
 		const { tenantId } = auth(c)
 		const body = c.req.valid("json")
-		const result = await core.recall({ tenantId, ...body })
-		if (!body.rerank || result.hits.length === 0) return c.json(result)
+		const resolved = body.rerank ? await resolver.resolve(tenantId) : null
+		const reranker = resolved?.reranker ?? null
 
-		const resolved = await resolver.resolve(tenantId)
-		const candidates = result.hits.map((h) => ({
-			id: h.memory.id,
-			text: h.memory.text,
-			score: h.score,
-		}))
-		const rerankResult = await resolved.reranker.rerank(
+		// Retrieve a wider pool for the reranker to choose from, then trim.
+		const poolSize = reranker
+			? Math.max(body.topK, body.rerankPool ?? rerankPool)
+			: body.topK
+		const { rerankPool: _pool, ...query } = body
+		const result = await core.recall({ tenantId, ...query, topK: poolSize })
+		const texts = result.hits.map((h) => h.memory.text)
+
+		// The built-in cross-encoder is English-only: only use it where it
+		// was measured to help. Tenant-configured rerankers always apply.
+		const apply =
+			reranker !== null &&
+			result.hits.length > 1 &&
+			(resolved?.source !== "builtin" || shouldRerank(body.query, texts))
+		if (!apply) {
+			return c.json({ ...result, hits: result.hits.slice(0, body.topK) })
+		}
+
+		const rerankResult = await reranker.rerank(
 			body.query,
-			candidates,
+			result.hits.map((h) => ({
+				id: h.memory.id,
+				text: h.memory.text,
+				score: h.score,
+			})),
 			body.topK,
 		)
-		const scoreById = new Map(
-			rerankResult.candidates.map((r) => [r.id, r.score]),
-		)
-		const rerankedHits = result.hits
-			.filter((h) => scoreById.has(h.memory.id))
-			.map((h) => ({ ...h, score: scoreById.get(h.memory.id) ?? h.score }))
-			.sort((a, b) => b.score - a.score)
+		const byId = new Map(result.hits.map((h) => [h.memory.id, h]))
+		const hits = rerankResult.candidates.flatMap((r) => {
+			const h = byId.get(r.id)
+			return h ? [{ ...h, score: r.score }] : []
+		})
 
 		return c.json({
-			hits: rerankedHits,
+			hits,
 			latencyMs: {
 				...result.latencyMs,
 				rerank: rerankResult.rerankMs,
 				total: result.latencyMs.total + rerankResult.rerankMs,
 			},
 			reranker: rerankResult.model,
-			rerankerSource: resolved.source,
+			rerankerSource: resolved?.source,
 		})
 	})
 }

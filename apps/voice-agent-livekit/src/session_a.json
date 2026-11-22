@@ -1,8 +1,10 @@
 [
-  {"turn": "hi, my name is Ayush and I live in Trikutta Towers, Powai, room number 913"},
-  {"turn": "my phone number is 98765 43211"},
-  {"turn": "I have a dog named Tuffy, he's a 4 year old labrador"},
-  {"turn": "my favorite programming language is TypeScript"},
-  {"turn": "my birthday is March 14th"},
-  {"turn": "great, that's all for now, talk soon"}
+	{
+		"turn": "hi, my name is Ayush and I live in Trikutta Towers, Powai, room number 913"
+	},
+	{ "turn": "my phone number is 98765 43211" },
+	{ "turn": "I have a dog named Tuffy, he's a 4 year old labrador" },
+	{ "turn": "my favorite programming language is TypeScript" },
+	{ "turn": "my birthday is March 14th" },
+	{ "turn": "great, that's all for now, talk soon" }
 ]

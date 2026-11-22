@@ -1,4 +1,4 @@
-import { zValidator } from "@hono/zod-validator"
+import { validate } from "../http.ts"
 import { createGraphStore, type Db } from "@repo/db"
 import { extractEntities } from "@repo/language"
 import { Hono } from "hono"
@@ -17,7 +17,7 @@ import { auth } from "../auth.ts"
  *                            memories (hydrated).
  */
 
-const upsertInput = z.object({
+export const upsertInput = z.object({
 	entities: z
 		.array(
 			z.object({
@@ -30,11 +30,11 @@ const upsertInput = z.object({
 		.max(500),
 })
 
-const extractInput = z.object({
+export const extractInput = z.object({
 	text: z.string().min(1).max(50_000),
 })
 
-const relationsInput = z.object({
+export const relationsInput = z.object({
 	relations: z
 		.array(
 			z.object({
@@ -48,7 +48,7 @@ const relationsInput = z.object({
 		.max(500),
 })
 
-const traverseInput = z.object({
+export const traverseInput = z.object({
 	startEntityId: z.string().min(1),
 	maxHops: z.number().int().min(1).max(4).default(2),
 	memoryLimit: z.number().int().min(1).max(200).default(20),
@@ -58,13 +58,13 @@ export function graphRouter(db: Db) {
 	const graph = createGraphStore(db)
 
 	return new Hono()
-		.post("/entities", zValidator("json", upsertInput), async (c) => {
+		.post("/entities", validate("json", upsertInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { entities } = c.req.valid("json")
 			const rows = await graph.upsertEntities(tenantId, entities)
 			return c.json({ entities: rows })
 		})
-		.post("/entities/extract", zValidator("json", extractInput), async (c) => {
+		.post("/entities/extract", validate("json", extractInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { text } = c.req.valid("json")
 			const extracted = extractEntities(text)
@@ -75,13 +75,13 @@ export function graphRouter(db: Db) {
 			)
 			return c.json({ entities: rows, spans: extracted })
 		})
-		.post("/relations", zValidator("json", relationsInput), async (c) => {
+		.post("/relations", validate("json", relationsInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { relations } = c.req.valid("json")
 			const rows = await graph.addRelations(tenantId, relations)
 			return c.json({ relations: rows })
 		})
-		.post("/traverse", zValidator("json", traverseInput), async (c) => {
+		.post("/traverse", validate("json", traverseInput), async (c) => {
 			const { tenantId } = auth(c)
 			const { startEntityId, maxHops, memoryLimit } = c.req.valid("json")
 			const walk = await graph.traverse(

@@ -1,46 +1,46 @@
 ---
 title: Gemini
-description: Google Gemini and Gemini Live API — memory injection + function calling.
+description: Recalled memory and memory function declarations for Google Gemini (@google/genai).
 section: Integrations
 order: 9
 ---
 
-The Gemini adapter targets both the standard `generateContent` API and the streaming Live API used for voice agents.
+`@smaranai/adapter-google` produces Gemini function declarations and a `systemInstruction` with recalled memories. First npm release pending — see the note on the [Anthropic page](/docs/adapters/anthropic).
 
-## Install
-
-```bash
-bun add @smaran/sdk @smaran/adapter-google @google/genai
-```
-
-## generateContent
+## Inject recalled memories
 
 ```ts
 import { GoogleGenAI } from "@google/genai"
-import { GeminiAdapter } from "@smaran/adapter-google"
-import { createMemoryClient } from "@smaran/sdk"
+import { Smaran } from "@smaranai/sdk-ts"
+import { withRecalledContext, memoryTools } from "@smaranai/adapter-google"
 
-const smaran = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY })
-const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-const memory = new GeminiAdapter(smaran, { sessionId: "sess_abc" })
+const smaran = new Smaran({ apiKey: process.env.SMARAN_API_KEY!, baseUrl: process.env.SMARAN_URL })
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
-const res = await memory.wrap(gemini).models.generateContent({
+const { systemInstruction, contents } = await withRecalledContext(
+  smaran,
+  { systemInstruction: "You are a helpful assistant.", contents: history },
+  { userId: "u_alice" },
+)
+
+const res = await ai.models.generateContent({
   model: "gemini-2.5-flash",
-  contents: "What did I ask about yesterday?",
-  config: { tools: [{ functionDeclarations: memory.tools() }] },
+  contents,
+  config: { systemInstruction, tools: memoryTools() },
 })
 ```
 
-`memory.wrap()` intercepts the request to prepend recalled context as a system instruction and handles `memory_save` / `memory_recall` function calls if Gemini invokes them.
-
-## Gemini Live (voice)
+## Handle function calls
 
 ```ts
-import { GeminiLiveAdapter } from "@smaran/adapter-google/live"
+import { handleFunctionCall, isMemoryFunctionCall } from "@smaranai/adapter-google"
 
-const live = new GeminiLiveAdapter(smaran, sessionId)
-session.on("serverContent", live.onServerContent)
-session.on("inputTranscription", live.onUserTranscript)
+const parts = await Promise.all(
+  (res.functionCalls ?? [])
+    .filter(isMemoryFunctionCall)
+    .map((call) => handleFunctionCall(smaran, { name: call.name!, args: call.args ?? {} }, { userId: "u_alice" })),
+)
+// send parts back as a user turn: { role: "user", parts }
 ```
 
-The Live adapter buffers partial transcripts and commits on turn end — the same pattern as LiveKit and the OpenAI Realtime adapter.
+Each result is a `functionResponse` part. The Gemini Live API isn't covered by a dedicated helper; use the same functions with your Live session's tool calls.

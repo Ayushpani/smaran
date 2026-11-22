@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-anthropic",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -10,12 +9,26 @@
 		}
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit -p tsconfig.test.json",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@repo/core": "workspace:*"
 	},
 	"devDependencies": {
+		"@anthropic-ai/sdk": "1.12.0",
 		"typescript": "5.8.3"
-	}
+	},
+	"peerDependencies": {
+		"@anthropic-ai/sdk": ">=0.30"
+	},
+	"description": "Smaran memory for the Anthropic Messages API: tools, tool_use handling and recalled-memory system prompts.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

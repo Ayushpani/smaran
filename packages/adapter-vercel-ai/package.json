@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-vercel-ai",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -10,12 +9,27 @@
 		}
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit -p tsconfig.test.json",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@repo/core": "workspace:*"
 	},
 	"devDependencies": {
-		"typescript": "5.8.3"
-	}
+		"ai": "7.0.179",
+		"typescript": "5.8.3",
+		"zod": "4.6.7"
+	},
+	"peerDependencies": {
+		"ai": ">=5"
+	},
+	"description": "Smaran memory for the Vercel AI SDK: tool() set for generateText/streamText and context injection.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

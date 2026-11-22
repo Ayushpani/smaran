@@ -1,7 +1,18 @@
 export interface Embedder {
 	readonly dim: number
+	/** Embeds stored content (a "passage"). */
 	embed(text: string): Promise<Float32Array>
 	embedBatch(texts: string[]): Promise<Float32Array[]>
+	/** Embeds a search query. Optional — asymmetric models (e5, bge) encode queries differently; others fall back to embed(). */
+	embedQuery?(text: string): Promise<Float32Array>
+	/**
+	 * Calibrated cosine similarity above which two memories are about the
+	 * same topic (used to group facts into a profile). Each model has its
+	 * own similarity range — e5 scores unrelated text ~0.8 — so a single
+	 * global threshold is wrong for all but one model. Undefined = the
+	 * uncalibrated default (0.65).
+	 */
+	readonly topicSimilarity?: number
 }
 
 /**

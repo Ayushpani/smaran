@@ -1,84 +1,59 @@
 ---
 title: MCP server
-description: Give Claude Desktop, Cursor, Codex CLI, or any MCP client a shared memory.
+description: Give Claude Desktop, Cursor, Windsurf or any MCP client memory backed by your Smaran API.
 section: Integrations
 order: 1
 ---
 
-Smaran ships a Model Context Protocol server that surfaces memory tools inside any MCP-aware client — Claude Desktop, Cursor, Windsurf, the Codex CLI, the Gemini CLI, or anything else that speaks MCP.
+Smaran ships a Model Context Protocol server that exposes memory tools to any MCP client. It's a thin layer over your Smaran API — it stores nothing itself.
 
-## Install
+## Tools
+
+- **`memory`** — `{ content, action: "save" | "forget", userId?, sessionId? }`. Save a fact, or forget one by describing it in plain words: the closest stored memory is deleted only if it clearly matches.
+- **`recall`** — `{ query, userId?, sessionId?, limit? }`. Returns the most relevant memories.
+
+Without a `userId`, memories go to a single shared space named `default`.
+
+## Option A — local (stdio)
+
+Runs on your machine, no deployment. With a Smaran API running (for example `bun run try`):
 
 ```bash
-bun add -g @smaran/mcp
-# or run without installing
-bunx @smaran/mcp --api-key sk_...
+SMARAN_URL=http://localhost:8787 SMARAN_API_KEY=sk_local_dev \
+  bun run apps/mcp/local-stdio.ts
 ```
 
-## Wire it into Claude Desktop
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Claude Desktop — edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`):
 
 ```json
 {
   "mcpServers": {
     "smaran": {
-      "command": "bunx",
-      "args": ["@smaran/mcp"],
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/smaran/apps/mcp/local-stdio.ts"],
       "env": {
-        "SMARAN_API_KEY": "sk_...",
-        "SMARAN_BASE_URL": "https://api.smaran.dev"
+        "SMARAN_URL": "http://localhost:8787",
+        "SMARAN_API_KEY": "sk_local_dev"
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. You should see `smaran` in the connected servers list and three tools become available:
+Cursor (`~/.cursor/mcp.json`), Windsurf and other stdio clients take the same `command` / `args` / `env` block.
 
-- `memory_save` — save a fact
-- `memory_recall` — search past memories
-- `memory_forget` — soft-delete a memory (audit log kept)
+## Option B — remote (Streamable HTTP)
 
-## Wire it into Cursor
+`apps/mcp` also deploys to Cloudflare Workers (Durable Objects; the free tier is enough to start):
 
-Cursor uses the same MCP config format. Add to Settings → MCP:
-
-```json
-{
-  "smaran": {
-    "command": "bunx",
-    "args": ["@smaran/mcp"],
-    "env": { "SMARAN_API_KEY": "sk_..." }
-  }
-}
+```bash
+cd apps/mcp
+# set API_URL in wrangler.jsonc to your Smaran API's public URL
+bunx wrangler deploy
 ```
 
-## Wire it into the Codex CLI
+Clients connect to `https://<your-worker>/mcp` with the header `Authorization: Bearer <smaran api key>`. The key is forwarded to your API, which validates it.
 
-Codex CLI reads `~/.codex/mcp.json`:
-
-```json
-{
-  "servers": {
-    "smaran": {
-      "command": "bunx",
-      "args": ["@smaran/mcp"]
-    }
-  }
-}
-```
-
-Then `codex chat` will have the memory tools in-scope.
-
-## Scoping to a session
-
-The MCP tools default to a fresh session ID per client boot, so different chats don't leak into each other. Pass a stable `sessionId` in the tool call to reuse memory across restarts:
-
-```
-memory_save({ text: "the user prefers monospace fonts", sessionId: "u_alice_prefs" })
-```
-
-<Callout tone="note" title="Local sandbox mode">
-Point `SMARAN_BASE_URL` at `http://localhost:8787` and skip the API key entirely to run the MCP server against your local sandbox — perfect for testing tool calls without cloud roundtrips.
+<Callout tone="info" title="Telemetry">
+The remote server sends tool-usage events to PostHog only when a `POSTHOG_API_KEY` binding is configured. Events carry the `userId` passed to the tool, the MCP client's name, and sizes and latencies — never memory content or queries. Leave the binding unset to send nothing.
 </Callout>

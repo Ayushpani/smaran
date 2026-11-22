@@ -75,3 +75,8 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+# Local development: resolve the core SDK from this repo (ignored when
+# the package is built and published; the wheel depends on PyPI "smaran").
+[tool.uv.sources]
+smaran = { path = "../sdk-python", editable = true }

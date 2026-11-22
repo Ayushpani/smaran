@@ -1,61 +1,61 @@
 ---
 title: Voice concepts
-description: Partial + commit, self-correction, filler scrub — how the pipeline actually thinks.
+description: Partial + commit, self-correction, filler cleanup — what the pipeline does to a voice turn.
 section: Get started
 order: 3
 ---
 
-Voice memory is different from text memory in one important way: the caller retracts. Every real voice turn ships with false starts, corrections, and fillers that don't belong in the stored record. Smaran's pipeline is built around that fact.
+Voice memory differs from text memory in one important way: callers correct themselves mid-sentence. Real turns carry false starts, retractions and hesitations that don't belong in the stored record. Smaran's write path is built around that.
 
 ## The two-phase turn
 
-Real-time voice agents don't get one clean utterance per turn — they get a stream of partial transcripts as the ASR is still hearing, then a final "commit" when the speaker pauses long enough to hand the turn back. Smaran exposes both:
+Voice agents receive a stream of partial transcripts while the speaker talks, then a final transcript when the turn ends. Smaran exposes both:
 
-- `POST /v1/ingest/partial` — replaces the working buffer for the turn. Zero-cost to call on every ASR word.
-- `POST /v1/ingest/commit` — freezes the buffer, runs self-correction, and writes to storage.
+- `POST /v1/ingest/partial` — adds to the session's turn buffer. Streaming ASR sends growing prefixes, so a new partial that extends the buffer replaces it, and overlap is never doubled.
+- `POST /v1/ingest/commit` — takes the buffer (or a `text` you pass), cleans it, self-corrects it, and saves it once.
 
-You call `partial` continuously and `commit` once per turn. Nothing is written until commit, so retractions inside the same turn never touch the graph.
+Nothing is stored until commit, so retractions inside a turn never reach storage. Buffers are per (tenant, session) and live in the API process.
 
 ## Self-correction
 
-The self-correction pass runs on every commit. It looks for two things:
+Runs on every save and commit.
 
 ### Retraction cues
 
-Words that signal the speaker is taking something back: `no`, `sorry`, `actually`, `wait`, `I mean`, `scratch that`, `no wait`, and their Hinglish equivalents (`nahi`, `matlab`, `haan wait`). When a cue is followed by a corrected value, the cue and the retracted value are dropped in-place.
+Phrases that signal the speaker is taking something back: `actually`, `sorry`, `wait`, `I mean`, `scratch that`, `my mistake`, `no wait`, and a standalone `no` followed by punctuation. Romanized-Hindi cues — `nahi`, `matlab`, `galti se` — count only when they open a clause after punctuation, so ordinary sentences like "mujhe nahi pata" are untouched.
 
 ### Slot patches
 
-When the correction is a single bare value (a number, an email, a phone), Smaran patches just that slot in the prior clause rather than replacing the whole thing:
+When the correction is just a value — digits, an email, a phone number, or spoken numbers in English or Hindi — only that value is replaced and the rest of the clause is kept:
 
 ```
-"my order is one two three four, actually four three two one"
-                                          ↓
-                    "my order is four three two one"
+"my room number is 13... sorry 913"              → "my room number is 913"
+"confirm my order — one two three four, actually four three two one"
+                                                 → "confirm my order — four three two one"
+"mera pin hai ek do teen, nahi teen do ek"       → "mera pin hai teen do ek"
 ```
 
-vs. wholesale replace when the caller restates the full context:
+### Replacements and additions
 
-```
-"my address is bandra east, actually the whole street is different — bandra west, flat 12"
-                                          ↓
-                    "the whole street is different — bandra west, flat 12"
-```
+A cue in the middle of a sentence replaces the clause before it ("my name is Ayush, sorry Ayushpani" → "Ayushpani"). A cue that opens a new sentence followed by a full clause is treated as new information ("I love sushi. Sorry, I have a meeting at 5pm" keeps both). A clause introduced by ". and" is always an addition.
 
-## Filler scrub
+What was dropped is recorded on the stored memory in `metadata.corrections` (`kind`: `patch` | `replace`, `retracted`, `kept`), alongside `metadata.originalText`.
 
-Before self-correction runs, the pipeline strips ASR noise words that don't carry meaning: `um`, `uh`, `like`, `you know`, `mera matlab`, `yaar`. This step happens **after** the retraction cue detector runs, so a filler that also functions as a cue (`I mean`) is preserved when it precedes a correction.
+## Questions and fillers
 
-## Language normalization
+- Pure confirmation questions ("is that 13 or 913?") are not stored. Statements that end in a question mark but carry a fact ("my address is 12 MG Road, right?") are.
+- On the voice path, hesitation sounds (`um`, `uh`, `er`, `hmm`) and stutters ("my my") are removed. Words that carry meaning — `like`, `actually` — are kept.
+- Hinglish filler words (`matlab`, `achha`, `yaani`…) are removed when surrounded by content.
 
-Smaran handles English, Hindi (Devanagari), and Hinglish (romanized Hindi) natively — the same commit endpoint accepts all three. Code-switch detection uses a combination of Unicode script ranges and a small lexical marker set (~200 common romanized-Hindi tokens). The stored value is always normalized to a canonical form.
+## Languages
 
-<Callout tone="info" title="You get to see what got dropped">
-Every save response includes a `corrections` array — one entry per retraction detected, with `kind` (replace | patch), `retracted`, and `kept`. Log it, audit it, or expose it in your admin UI.
-</Callout>
+English, Hindi (Devanagari) and romanized Hinglish go through the same endpoints. Text is never translated — code-switched content is stored as spoken, and the default multilingual embedding model places "mera ghar Andheri mein hai" next to "I live in Andheri". The detected language and a code-switch flag are stored in metadata.
 
-## What the pipeline does NOT do
+## Across turns and sessions
 
-- **No LLM in the hot path.** Self-correction is deterministic string transformations plus a tiny classifier. Adding an LLM would add hundreds of milliseconds; the whole point is sub-3ms round trips.
-- **No PII redaction on save.** Storage retention and PII handling are policy decisions — see the DPDP guide when it lands. Smaran gives you the tools to redact, but doesn't scrub by default.
-- **No cross-turn coreference in v0.1.** "The number I said earlier" needs turn history; that's on the roadmap.
+When a user restates a fact, Smaran corroborates the existing memory instead of storing a duplicate. When a number, email or phone in the same sentence frame changes ("my room number is 13" → "…913"), the old memory is closed and the new one supersedes it; it stays visible to point-in-time recall (`asOf`). Other changes ("I am allergic to peanuts" → "…penicillin") keep both — Smaran never hides a fact it can't be sure was replaced.
+
+## What the pipeline does not do
+
+- **No LLM in the write or recall path.** Cleaning and correction are deterministic; recall uses a small local embedding model plus keyword search, then a small local cross-encoder re-orders the top candidates. Recall is ~140 ms in-process on CPU (`rerankPool: 20` brings it to ~95 ms), or ~15 ms with `rerank: false` (see RESULTS.md).
+- **No PII redaction on save.** Redact at your edge before calling `save` if you don't want certain identifiers stored.

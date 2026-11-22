@@ -1,4 +1,5 @@
 import {
+	type MemoryToolParamType,
 	type AdapterScope,
 	type AutoRecallOptions,
 	buildRecalledContext,
@@ -8,67 +9,70 @@ import {
 	memoryToolSpecs,
 } from "@repo/core"
 
-/** Google GenAI function-declaration format. Wrap in `{ functionDeclarations: [...] }` when passing to `tools`. */
+/**
+ * Gemini function declaration (structurally `FunctionDeclaration` from
+ * @google/genai). Uses `parametersJsonSchema`, which takes standard JSON
+ * Schema — no hand-mapping to Gemini's OpenAPI-subset `Type` enum.
+ */
 export interface GoogleFunctionDeclaration {
 	name: string
 	description: string
-	parameters: {
-		type: "OBJECT"
-		properties: Record<string, { type: string; description: string }>
+	parametersJsonSchema: {
+		type: "object"
+		properties: Record<
+			string,
+			{ type: MemoryToolParamType; description: string }
+		>
 		required: string[]
 	}
 }
-
-const upperType = (t: string): string => t.toUpperCase()
 
 export function memoryFunctionDeclarations(): GoogleFunctionDeclaration[] {
 	return memoryToolSpecs.map((spec) => ({
 		name: spec.name,
 		description: spec.description,
-		parameters: {
-			type: "OBJECT" as const,
-			properties: Object.fromEntries(
-				Object.entries(spec.parameters.properties).map(([k, v]) => [
-					k,
-					{ type: upperType(v.type), description: v.description },
-				]),
-			),
-			required: spec.parameters.required,
-		},
+		parametersJsonSchema: spec.parameters,
 	}))
 }
 
-/** Convenience: the value to place in the model's `tools` array. */
+/** The value to place in `config.tools` for `ai.models.generateContent`. */
 export function memoryTools(): Array<{
 	functionDeclarations: GoogleFunctionDeclaration[]
 }> {
 	return [{ functionDeclarations: memoryFunctionDeclarations() }]
 }
 
-/** Whatever Gemini returns from `response.functionCalls()`. */
+/** A function call as returned by `response.functionCalls` (all fields optional in @google/genai). */
 export interface GoogleFunctionCall {
-	name: string
-	args: Record<string, unknown>
+	id?: string
+	name?: string
+	args?: Record<string, unknown>
 }
 
 /**
  * Execute a memory function call and return the `functionResponse` part
- * to include in the next `generateContent` turn.
+ * to send back in the next turn. Uses the `output` key, which the Gemini
+ * API documents for function results.
  */
 export async function handleFunctionCall(
 	client: MemoryClient,
 	call: GoogleFunctionCall,
 	scope: AdapterScope,
 ): Promise<{
-	functionResponse: { name: string; response: { content: string } }
+	functionResponse: { id?: string; name: string; response: { output: string } }
 }> {
+	const name = call.name ?? ""
 	const res = await handleMemoryToolCall(
 		client,
-		{ name: call.name, input: call.args ?? {} },
+		{ name, input: call.args ?? {} },
 		scope,
 	)
 	return {
-		functionResponse: { name: call.name, response: { content: res.content } },
+		functionResponse: {
+			...(call.id ? { id: call.id } : {}),
+			name,
+			response: { output: res.content },
+		},
 	}
 }
 

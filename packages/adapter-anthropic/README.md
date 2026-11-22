@@ -38,11 +38,19 @@ import { withRecalledContext } from "@smaranai/adapter-anthropic"
 
 const { system, messages } = await withRecalledContext(
 	memory,
-	{ system: "You are a helpful assistant.", messages: [{ role: "user", content: "book me a flight to Delhi" }] },
+	{
+		system: "You are a helpful assistant.",
+		messages: [{ role: "user", content: "book me a flight to Delhi" }],
+	},
 	{ sessionId: "sess_abc", topK: 5 },
 )
-const res = await anthropic.messages.create({ model, max_tokens: 1024, system, messages })
+const res = await anthropic.messages.create({
+	model,
+	max_tokens: 1024,
+	system,
+	messages,
+})
 ```
 
 The two patterns compose — declare `memoryTools()` for model-initiated writes
-*and* call `withRecalledContext()` for silent reads on the same turn.
+_and_ call `withRecalledContext()` for silent reads on the same turn.

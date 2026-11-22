@@ -66,8 +66,9 @@ function tryCmd(): void {
 	runApi({
 		STORE: "memory",
 		PORT: process.env.PORT ?? "8787",
-		EMBEDDER: "hash",
+		EMBEDDER: process.env.EMBEDDER ?? "local",
 		SANDBOX_API_KEY: process.env.SANDBOX_API_KEY ?? "sk_local_dev",
+		RATE_LIMIT_PER_MINUTE: process.env.RATE_LIMIT_PER_MINUTE ?? "1000000",
 	})
 }
 
@@ -91,7 +92,7 @@ function initCmd(argv: string[]): void {
 		"STORE=supabase",
 		`DATABASE_URL=${url}`,
 		"PORT=8787",
-		"EMBEDDER=hash",
+		"EMBEDDER=local",
 		"CORS_ORIGIN=*",
 		"",
 	].join("\n")

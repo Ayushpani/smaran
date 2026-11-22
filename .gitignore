@@ -48,8 +48,6 @@ models/
 *.pt
 *.pth
 *.safetensors
-packages/benchmark/results/
-packages/benchmark/data/
 
 # Python & Scripts
 __pycache__/
@@ -71,3 +69,9 @@ bun-debug.log*
 .DS_Store
 *.pem
 Thumbs.db
+
+# Local embedding model cache
+.smaran/
+
+# Publish-ready package builds
+dist-publish/

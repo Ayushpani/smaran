@@ -1,7 +1,6 @@
 {
 	"name": "@smaranai/adapter-google",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"exports": {
 		".": {
@@ -10,12 +9,26 @@
 		}
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit -p tsconfig.test.json",
+		"test": "bun test test"
 	},
 	"dependencies": {
 		"@repo/core": "workspace:*"
 	},
 	"devDependencies": {
+		"@google/genai": "3.6.1",
 		"typescript": "5.8.3"
-	}
+	},
+	"peerDependencies": {
+		"@google/genai": ">=1"
+	},
+	"description": "Smaran memory for Google Gemini (@google/genai): function declarations and recalled systemInstruction.",
+	"license": "MIT",
+	"keywords": [
+		"smaran",
+		"memory",
+		"ai-agents",
+		"voice-agents",
+		"llm"
+	]
 }

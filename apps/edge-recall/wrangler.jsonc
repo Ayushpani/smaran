@@ -11,6 +11,7 @@
 		}
 	],
 	"vars": {
-		"ORIGIN_URL": "https://api.smaran.ai"
+		// Set to your Smaran API's public URL before deploying.
+		"ORIGIN_URL": "https://your-smaran-api.example.com"
 	}
 }

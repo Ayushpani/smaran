@@ -1,45 +1,46 @@
 ---
 title: Pipecat
-description: Add Smaran as a processor in a Pipecat pipeline.
+description: Add Smaran memory as a processor in a Pipecat pipeline (Python).
 section: Integrations
 order: 5
 ---
 
-Pipecat pipelines are chains of `FrameProcessor`s. Smaran ships a Python processor that hooks the `UserTranscriptFrame` and the `LLMFullResponseEndFrame` events.
+`smaran-pipecat` is a Pipecat `FrameProcessor`. Placed after the user context aggregator, it recalls memories for the latest user message, injects them into the LLM context, and saves the message.
 
 ## Install
 
 ```bash
-pip install smaran-pipecat
+pip install smaran-pipecat   # Python 3.11+
 ```
+
+<Callout tone="warn" title="Publishing in progress">
+`smaran-pipecat` depends on the core `smaran` package, which is being published to PyPI. Until it is, install both from the repo: `pip install ./packages/sdk-python ./packages/pipecat-sdk-python`.
+</Callout>
 
 ## Pipeline
 
 ```py
+import os
 from pipecat.pipeline.pipeline import Pipeline
-from smaran_pipecat import SmaranProcessor
+from smaran_pipecat import SmaranPipecatService
 
-smaran = SmaranProcessor(
-    api_key=os.environ["SMARAN_API_KEY"],
-    session_id=call_sid,
+memory = SmaranPipecatService(
+    api_key=os.getenv("SMARAN_API_KEY"),
+    base_url=os.getenv("SMARAN_URL"),
+    user_id="user-123",
+    params=SmaranPipecatService.InputParams(search_limit=5, inject_mode="auto", save_memory=True),
 )
 
 pipeline = Pipeline([
     transport.input(),
     stt,
-    smaran,   # <-- captures user transcripts, injects recall context
+    context_aggregator.user(),
+    memory,                       # recall + inject + save
     llm,
     tts,
     transport.output(),
+    context_aggregator.assistant(),
 ])
 ```
 
-The processor reads `UserTranscriptFrame`, commits it to Smaran, and pushes a `LLMMessagesFrame` with recalled context appended to the system prompt before the LLM runs.
-
-## Session lifecycle
-
-The Pipecat processor holds its own session buffer. On `UserStartedSpeakingFrame` it opens a partial-ingestion window; on `UserStoppedSpeakingFrame` it commits. No manual open/close needed.
-
-<Callout tone="warn" title="Python SDK vs TS SDK">
-`smaran-pipecat` is a thin Python wrapper around the REST API — the primary SDK is TypeScript. If you find a bug in the Python wrapper, file it against the pipecat adapter package, not the core SDK.
-</Callout>
+`inject_mode` controls where memories go: `"system"`, `"user"`, or `"auto"`.

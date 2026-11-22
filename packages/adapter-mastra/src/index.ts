@@ -2,91 +2,53 @@ import {
 	type AdapterScope,
 	handleMemoryToolCall,
 	type MemoryClient,
-	memoryToolSpecs,
+	MEMORY_TOOL_NAMES,
 } from "@repo/core"
+import { createTool } from "@mastra/core/tools"
+import { z } from "zod"
 
 /**
- * Mastra tool wrapper. Mastra's createTool() takes:
- *   { id, description, inputSchema, execute }
- * where inputSchema is a Zod object. We return objects with the SAME
- * shape but with `parameters` as JSON Schema instead of Zod so users
- * can pipe into `z.object(...).describe(...)` at their end, or pass the
- * factory a zod builder to get real Mastra tools directly.
+ * Mastra integration (tested against @mastra/core 1.x). Returns tools made
+ * with Mastra's own `createTool` and Zod schemas, ready for
+ * `new Agent({ tools: memoryTools(memory, scope) })`.
  */
-
-export interface MastraToolDescriptor {
-	id: string
-	description: string
-	parameters: {
-		type: "object"
-		properties: Record<string, { type: string; description: string }>
-		required: string[]
-	}
-	execute: (input: Record<string, unknown>) => Promise<{ result: string }>
-}
-
-export function memoryToolDescriptors(
-	client: MemoryClient,
-	scope: AdapterScope,
-): MastraToolDescriptor[] {
-	return memoryToolSpecs.map((spec) => ({
-		id: spec.name,
-		description: spec.description,
-		parameters: spec.parameters,
-		execute: async (input) => {
-			const res = await handleMemoryToolCall(
-				client,
-				{ name: spec.name, input },
-				scope,
-			)
-			return { result: res.content }
-		},
-	}))
-}
-
-/**
- * Convenience for callers who already have `createTool` and a Zod
- * builder — pass both and get back real `Tool` instances bound to
- * this memory + scope.
- */
-export interface MastraToolBuilder<T> {
-	createTool: (spec: {
-		id: string
-		description: string
-		inputSchema: unknown
-		execute: (opts: { context: Record<string, unknown> }) => Promise<unknown>
-	}) => T
-	zObject: (shape: Record<string, unknown>) => unknown
-	zString: () => unknown
-	zNumberOptional: () => unknown
-}
-
-export function buildMemoryTools<T>(
-	client: MemoryClient,
-	scope: AdapterScope,
-	builder: MastraToolBuilder<T>,
-): T[] {
-	const shape = (spec: (typeof memoryToolSpecs)[number]) => {
-		const s: Record<string, unknown> = {}
-		if (spec.parameters.properties.text) s.text = builder.zString()
-		if (spec.parameters.properties.query) s.query = builder.zString()
-		if (spec.parameters.properties.topK) s.topK = builder.zNumberOptional()
-		return s
-	}
-
-	return memoryToolSpecs.map((spec) =>
-		builder.createTool({
-			id: spec.name,
-			description: spec.description,
-			inputSchema: builder.zObject(shape(spec)),
-			execute: async ({ context }) => {
-				const res = await handleMemoryToolCall(
-					client,
-					{ name: spec.name, input: context },
-					scope,
-				)
-				return res.content
-			},
+export function memoryTools(client: MemoryClient, scope: AdapterScope) {
+	return {
+		[MEMORY_TOOL_NAMES.save]: createTool({
+			id: MEMORY_TOOL_NAMES.save,
+			description:
+				"Persist a fact, preference, event, or entity the user has revealed, so it can be recalled in future turns and sessions. Save concise, self-contained statements — not the whole message.",
+			inputSchema: z.object({
+				text: z.string().describe("The self-contained fact to remember."),
+			}),
+			execute: async (input) =>
+				(
+					await handleMemoryToolCall(
+						client,
+						{ name: MEMORY_TOOL_NAMES.save, input },
+						scope,
+					)
+				).content,
 		}),
-	)
+		[MEMORY_TOOL_NAMES.recall]: createTool({
+			id: MEMORY_TOOL_NAMES.recall,
+			description:
+				"Search prior memories for anything relevant to the current turn. Use liberally — recall is cheap and helps avoid asking the user for information they already provided.",
+			inputSchema: z.object({
+				query: z.string().describe("A short query capturing what to recall."),
+				topK: z
+					.number()
+					.optional()
+					.describe("Max number of hits to return. Defaults to 5."),
+			}),
+			execute: async (input) =>
+				(
+					await handleMemoryToolCall(
+						client,
+						{ name: MEMORY_TOOL_NAMES.recall, input },
+						scope,
+					)
+				).content,
+		}),
+	}
 }

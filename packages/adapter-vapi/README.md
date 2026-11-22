@@ -24,7 +24,12 @@ app.post("/vapi", async (c) => {
 
 	let session = sessions.get(callId)
 	if (!session) {
-		session = new StreamingSession({ sessionId: callId, userId, client: memory, cache })
+		session = new StreamingSession({
+			sessionId: callId,
+			userId,
+			client: memory,
+			cache,
+		})
 		sessions.set(callId, session)
 	}
 

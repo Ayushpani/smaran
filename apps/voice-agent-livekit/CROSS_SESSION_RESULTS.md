@@ -25,6 +25,7 @@ code path changes between conditions.
    drawing a conclusion from a single lucky/unlucky run.
 
 Reproduce locally:
+
 ```bash
 uv run python src/agent.py dev                                     # terminal 1 — leave running
 bash src/run_repeated_cross_session.sh <label> <N>                 # terminal 2 — runs N trials, aggregates pass rate
@@ -39,10 +40,10 @@ results land in `repeated_results_<label>/run_N.json`.
 
 ## Aggregate results
 
-| Condition | Runs | Questions | Passed | Pass rate |
-|---|---|---|---|---|
-| **With Smaran** | 5 | 25 | 25 | **100%** |
-| **Without Smaran (baseline)** | 3 | 15 | 1* | **~0%*** |
+| Condition                     | Runs | Questions | Passed | Pass rate |
+| ----------------------------- | ---- | --------- | ------ | --------- |
+| **With Smaran**               | 5    | 25        | 25     | **100%**  |
+| **Without Smaran (baseline)** | 3    | 15        | 1*     | **~0%***  |
 
 \* The single "pass" in the baseline column was the birthday question, where
 the agent said "your birthday is October fourteenth" — the substring checker
@@ -53,17 +54,17 @@ one of them. Treat the real baseline rate as **0/15**.
 
 ## Session B — representative run, fresh room, no shared chat history
 
-| Question | Actually told (Session A) | **With Smaran** | **Without Smaran** |
-|---|---|---|---|
-| What is my address? | Trikutta Towers, Powai, room 913 | ✅ "You live at Trikutta Towers, Powai, room number nine hundred thirteen." | ❌ "Your address is one two three Maple Street." |
-| What's my phone number? | 98765 43211 | ✅ "Your phone number is nine eight seven six five four three two one one." | ❌ "Your phone number is five five five zero one two three four five six." |
-| What's my dog's name and breed? | Tuffy, Labrador | ✅ "Your dog's name is Tuffy, and he's a labrador." | ❌ "Your dog's name is Buddy and he's a Golden Retriever." |
-| What's my favorite programming language? | TypeScript | ✅ "Your favorite programming language is TypeScript." | ❌ "You've told me that your favorite is Python." |
-| When's my birthday? | March 14th | ✅ "Your birthday is March fourteenth." | ❌ "Your birthday is October twelfth." |
+| Question                                 | Actually told (Session A)        | **With Smaran**                                                             | **Without Smaran**                                                         |
+| ---------------------------------------- | -------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| What is my address?                      | Trikutta Towers, Powai, room 913 | ✅ "You live at Trikutta Towers, Powai, room number nine hundred thirteen." | ❌ "Your address is one two three Maple Street."                           |
+| What's my phone number?                  | 98765 43211                      | ✅ "Your phone number is nine eight seven six five four three two one one." | ❌ "Your phone number is five five five zero one two three four five six." |
+| What's my dog's name and breed?          | Tuffy, Labrador                  | ✅ "Your dog's name is Tuffy, and he's a labrador."                         | ❌ "Your dog's name is Buddy and he's a Golden Retriever."                 |
+| What's my favorite programming language? | TypeScript                       | ✅ "Your favorite programming language is TypeScript."                      | ❌ "You've told me that your favorite is Python."                          |
+| When's my birthday?                      | March 14th                       | ✅ "Your birthday is March fourteenth."                                     | ❌ "Your birthday is October twelfth."                                     |
 
 **The failure mode without Smaran is the important part.** Across all 3
 baseline runs, the agent never once said "I don't know" — it confidently
-invented a *different* wrong fact almost every time (address swung between
+invented a _different_ wrong fact almost every time (address swung between
 "123 Maple Street" and "1242 Maple Street"; phone number was always the same
 fabricated "555-012-3456"; the dog became "Buddy the Golden Retriever" in
 every run; the language was always "Python"; the birthday guess changed
@@ -74,14 +75,14 @@ consistent enough across runs to look deliberate rather than random.
 
 ## Session A — establishing the facts (identical prompts, both conditions)
 
-| Turn | Agent reply (representative) |
-|---|---|
-| "hi, my name is Ayush and I live in Trikutta Towers, Powai, room number 913" | "Hi Ayush! It's nice to meet you. Is there something I can help you with today?" |
-| "my phone number is 98765 43211" | "Got it. I've noted your phone number as nine eight seven six five four three two one one." |
-| "I have a dog named Tuffy, he's a 4 year old labrador" | "Oh, a labrador! Tuffy sounds like a wonderful dog. Does he have a favorite toy or a special treat he loves?" |
-| "my favorite programming language is TypeScript" | "TypeScript is a great choice. It really helps catch those tricky errors early on." |
-| "my birthday is March 14th" | "I've got that down. Your birthday is March fourteenth." |
-| "great, that's all for now, talk soon" | "Sounds good! It was great getting to know you, Ayush. Talk to you soon!" |
+| Turn                                                                         | Agent reply (representative)                                                                                  |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| "hi, my name is Ayush and I live in Trikutta Towers, Powai, room number 913" | "Hi Ayush! It's nice to meet you. Is there something I can help you with today?"                              |
+| "my phone number is 98765 43211"                                             | "Got it. I've noted your phone number as nine eight seven six five four three two one one."                   |
+| "I have a dog named Tuffy, he's a 4 year old labrador"                       | "Oh, a labrador! Tuffy sounds like a wonderful dog. Does he have a favorite toy or a special treat he loves?" |
+| "my favorite programming language is TypeScript"                             | "TypeScript is a great choice. It really helps catch those tricky errors early on."                           |
+| "my birthday is March 14th"                                                  | "I've got that down. Your birthday is March fourteenth."                                                      |
+| "great, that's all for now, talk soon"                                       | "Sounds good! It was great getting to know you, Ayush. Talk to you soon!"                                     |
 
 ## Latency
 

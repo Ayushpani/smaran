@@ -1,10 +1,17 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
+import { Grain } from "@/components/site/grain"
+import { PALETTE_INIT } from "@/lib/palette"
 import "./globals.css"
 
 export const metadata: Metadata = {
-	title: "Smaran · स्मरण — memory for voice agents",
+	title: "Smaran, स्मरण: memory for voice agents",
 	description:
-		"Voice-native memory layer for AI agents. Self-correcting, sub-3ms recall, Hindi + English out of the box.",
+		"Self-hosted memory for voice agents. Stores what the caller meant after they correct themselves, keeps the history of every fact, and recalls in English, Hindi and Hinglish.",
+}
+
+export const viewport: Viewport = {
+	viewportFit: "cover",
+	themeColor: "#1636c9",
 }
 
 export default function RootLayout({
@@ -13,8 +20,10 @@ export default function RootLayout({
 	children: React.ReactNode
 }) {
 	return (
-		<html lang="en">
+		<html lang="en" suppressHydrationWarning>
 			<head>
+				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: static, first-party palette bootstrap */}
+				<script dangerouslySetInnerHTML={{ __html: PALETTE_INIT }} />
 				<link rel="preconnect" href="https://fonts.googleapis.com" />
 				<link
 					rel="preconnect"
@@ -22,11 +31,14 @@ export default function RootLayout({
 					crossOrigin=""
 				/>
 				<link
-					href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Newsreader:ital,opsz,wght@0,6..72,300..500;1,6..72,300..500&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Rozha+One&family=Tiro+Devanagari+Sanskrit&display=swap"
+					href="https://fonts.googleapis.com/css2?family=Anek+Devanagari:wdth,wght@75..125,300..800&family=Anek+Latin:wdth,wght@75..125,300..800&family=IBM+Plex+Mono:wght@400;500&display=swap"
 					rel="stylesheet"
 				/>
 			</head>
-			<body>{children}</body>
+			<body>
+				<Grain />
+				{children}
+			</body>
 		</html>
 	)
 }

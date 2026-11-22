@@ -46,13 +46,22 @@ const STRONG_CUES = [
 	"actualy",
 ]
 
+// Romanized-Hindi cues are everyday words too ("mujhe nahi pata"), so
+// they only count when they OPEN a clause right after punctuation:
+// "ek do teen, nahi teen do ek".
+const CLAUSE_INITIAL_CUES = ["nahi nahi", "nahi", "matlab", "galti se"]
+// Likewise a clause-initial "no" directly followed by a number ("flat 21,
+// no 12") is a correction, while "…, no problem" is not.
+
 // Standalone "no" separated from surrounding words by punctuation or a
 // pause marker (…). We do NOT match "no" as a full word in general —
 // too many false positives ("no problem", "no one is home").
 const CUE_PATTERN = new RegExp(
 	`(?:^|[\\s,.\\-—])(${STRONG_CUES.map((c) => c.replace(/\s+/g, "\\s+"))
 		.sort((a, b) => b.length - a.length)
-		.join("|")})(?=\\b)|(?:^|[\\s])no[\\s]*[,.\\-—…]+`,
+		.join(
+			"|",
+		)})(?=\\b)|(?:^|[\\s])no[\\s]*[,.\\-—…]+|(?:[,.\\-—…]\\s*)(?:${CLAUSE_INITIAL_CUES.join("|")})(?=\\s)|(?:[,.\\-—…]\\s*)no(?=\\s+\\d)`,
 	"gi",
 )
 
@@ -91,6 +100,8 @@ const CONTENT_ANCHORS = [
 
 import { tokenize } from "./tokenize.ts"
 
+const FRAGMENT_MAX_TOKENS = 4
+
 // Previously a fixed English function-word list. Real stopword filtering
 // (corpus-relative IDF, see tokenize.ts) needs a per-tenant document-
 // frequency table this module doesn't have access to. Rather than fake
@@ -117,15 +128,29 @@ export function applySelfCorrection(input: string): SelfCorrectionResult {
 
 	const rawSegments = splitOnCues(trimmed)
 	if (rawSegments.length <= 1) {
-		return { text: trimmed, corrections: [], segments: rawSegments }
+		return {
+			text: trimmed,
+			corrections: [],
+			segments: rawSegments.map((seg) => seg.text),
+		}
 	}
 
 	// Second pass: some segments carry two ideas separated by "and" —
 	// split them so slot-patches don't accidentally eat the second idea.
-	const segments: string[] = []
+	// Pieces after a ". and" split begin a new sentence by construction.
+	const parts: Segment[] = []
 	for (const seg of rawSegments) {
-		for (const s of splitOnAnd(seg)) if (s) segments.push(s)
+		splitOnAnd(seg.text).forEach((text, i) => {
+			if (text) {
+				parts.push(
+					i === 0
+						? { text, startsSentence: seg.startsSentence }
+						: { text, startsSentence: true, continuation: true },
+				)
+			}
+		})
 	}
+	const segments = parts.map((seg) => seg.text)
 
 	const corrections: Correction[] = []
 	const kept: string[] = []
@@ -150,7 +175,12 @@ export function applySelfCorrection(input: string): SelfCorrectionResult {
 		// it — same conceptual slot — replace the prior wholesale.
 		if (
 			kept.length > 0 &&
-			sharesAnchorOrEntity(kept[kept.length - 1]!, current, segments.length)
+			!parts[i]!.continuation &&
+			sharesAnchorOrEntity(
+				kept[kept.length - 1]!,
+				current,
+				parts[i]!.startsSentence,
+			)
 		) {
 			corrections.push({
 				kind: "replace",
@@ -171,18 +201,32 @@ export function applySelfCorrection(input: string): SelfCorrectionResult {
 	}
 }
 
-function splitOnCues(text: string): string[] {
-	const out: string[] = []
+interface Segment {
+	text: string
+	/** True when the cue that introduced this segment opened a new sentence (prior text ended in . ! ? or ।). */
+	startsSentence: boolean
+	/** Split off by ". and …" — an added fact, never a correction. */
+	continuation?: boolean
+}
+
+const SENTENCE_END = /[.!?\u0964]\s*$/u
+
+function splitOnCues(text: string): Segment[] {
+	const out: Segment[] = []
 	let last = 0
+	let startsSentence = false
 	for (const match of text.matchAll(CUE_PATTERN)) {
 		if (match.index === undefined) continue
 		const before = text.slice(last, match.index)
-		if (before.trim()) out.push(cleanEdges(before))
+		if (before.trim()) {
+			out.push({ text: cleanEdges(before), startsSentence })
+		}
+		startsSentence = SENTENCE_END.test(before)
 		last = match.index + match[0].length
 	}
 	const tail = text.slice(last)
-	if (tail.trim()) out.push(cleanEdges(tail))
-	return out.filter(Boolean)
+	if (tail.trim()) out.push({ text: cleanEdges(tail), startsSentence })
+	return out.filter((seg) => seg.text)
 }
 
 function splitOnAnd(segment: string): string[] {
@@ -221,7 +265,69 @@ function tryPatch(prior: string | undefined, current: string): string | null {
 		const value = current.trim()
 		return replaceLastToken(prior, /\+?\d[\d\s\-()]{5,}/g, value)
 	}
+	// Spoken numbers ("one two three four", "ek do teen") are values too:
+	// replace the prior clause's trailing run of number words, keeping its
+	// frame — "confirm my order one two three four … four three two one"
+	// must store "confirm my order four three two one", not a bare value.
+	const spoken = current.trim().replace(/[.!,]+$/, "")
+	if (isSpokenNumber(spoken)) {
+		const words = prior.trim().split(/\s+/)
+		let start = words.length
+		while (start > 0 && isNumberWord(stripPunct(words[start - 1]!))) start--
+		if (start < words.length && start > 0) {
+			return [...words.slice(0, start), spoken].join(" ")
+		}
+	}
 	return null
+}
+
+const NUMBER_WORDS = new Set([
+	// English
+	"zero",
+	"oh",
+	"one",
+	"two",
+	"three",
+	"four",
+	"five",
+	"six",
+	"seven",
+	"eight",
+	"nine",
+	"ten",
+	"eleven",
+	"twelve",
+	"double",
+	"triple",
+	// Romanized Hindi
+	"shunya",
+	"ek",
+	"do",
+	"teen",
+	"char",
+	"chaar",
+	"paanch",
+	"panch",
+	"chhe",
+	"chhah",
+	"saat",
+	"aath",
+	"nau",
+	"das",
+])
+
+function stripPunct(w: string): string {
+	return w.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
+}
+
+function isNumberWord(w: string): boolean {
+	return NUMBER_WORDS.has(w) || /^\d+$/.test(w)
+}
+
+/** Two or more number words / digit groups and nothing else. */
+function isSpokenNumber(text: string): boolean {
+	const words = text.split(/\s+/).map(stripPunct).filter(Boolean)
+	return words.length >= 2 && words.every(isNumberWord)
 }
 
 function replaceLastToken(
@@ -243,7 +349,7 @@ function replaceLastToken(
 function sharesAnchorOrEntity(
 	prev: string,
 	next: string,
-	totalSegments: number,
+	nextStartsSentence: boolean,
 ): boolean {
 	const pLower = prev.toLowerCase()
 	const nLower = next.toLowerCase()
@@ -255,10 +361,17 @@ function sharesAnchorOrEntity(
 	const nw = new Set(contentWords(next))
 	for (const w of nw) if (pw.has(w)) return true
 
-	// Aggressive fallback: when the turn only has two segments and there
-	// was a retract cue between them, the caller is almost always
-	// correcting themselves. Prefer the later.
-	return totalSegments === 2
+	// Fallback: segments split by a retraction cue with no shared anchor.
+	// A cue in the middle of a sentence ("my name is Ayush, sorry
+	// Ayushpani", "…andheri, actually bandra west") is a self-correction:
+	// replace. A cue that OPENS a new sentence followed by a full clause
+	// ("I love sushi. Sorry, I have a meeting at 5pm") is new information
+	// — replacing would silently drop the first fact. A short fragment
+	// after a full stop ("I live in Powai. Actually, Andheri.") is still a
+	// correction. Decided per boundary, so it holds however many cues the
+	// turn contains.
+	if (!nextStartsSentence) return true
+	return tokenize(next).length <= FRAGMENT_MAX_TOKENS
 }
 
 function contentWords(text: string): string[] {

@@ -1,7 +1,7 @@
 # `@smaranai/adapter-vercel-ai`
 
-Vercel AI SDK plugin. Drop-in tools and silent-context helpers for
-`generateText`, `streamText`, and the Assistant/Agent runtimes.
+Vercel AI SDK plugin (AI SDK 5+, tested against 7). Drop-in tools and silent-context helpers for
+`generateText`, `streamText` and agents.
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic"
@@ -24,6 +24,6 @@ const res = await generateText({
 })
 ```
 
-`memoryTools` returns `{ memory_save, memory_recall }` in the AI SDK's
-tool shape. Each tool's `execute` calls into `@repo/core`'s tool
+`memoryTools` returns `{ memory_save, memory_recall }` built with the SDK's own
+`tool()` and `jsonSchema()` (`ai` is a peer dependency). Each tool's `execute` calls into `@repo/core`'s tool
 handler, so the SDK's tool-use loop just works.

@@ -1,4 +1,5 @@
 import {
+	type MemoryToolParamType,
 	type AdapterScope,
 	buildRecalledContext,
 	handleMemoryToolCall,
@@ -28,7 +29,10 @@ export interface LiveKitFunctionTool {
 	description: string
 	parameters: {
 		type: "object"
-		properties: Record<string, { type: string; description: string }>
+		properties: Record<
+			string,
+			{ type: MemoryToolParamType; description: string }
+		>
 		required: string[]
 	}
 }

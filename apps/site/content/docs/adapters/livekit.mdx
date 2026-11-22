@@ -1,46 +1,45 @@
 ---
 title: LiveKit
-description: Inject micro-context into a LiveKit Agents voice pipeline in under 3ms.
+description: Save each user turn and inject recalled memory into a LiveKit Agents voice pipeline.
 section: Integrations
 order: 4
 ---
 
-LiveKit Agents emit `user_speech_committed` and `agent_speech_committed` events. The LiveKit adapter subscribes to the first and injects a Smaran-fetched context prefix before the LLM turn.
+There are two ways to use Smaran with LiveKit Agents.
 
-## Install
+## Python agents (most common)
 
-```bash
-bun add @smaran/sdk @smaran/adapter-livekit
+`apps/voice-agent-livekit` is a complete, runnable LiveKit Agents (Python) voice agent. It recalls memories in `on_user_turn_completed` and injects them into the turn's context, and saves the user's turn — all over the REST API. Copy its `smaran_recall` / `smaran_save` helpers into your agent, or use the `smaran` Python SDK:
+
+```py
+from smaran import Smaran
+
+smaran = Smaran(api_key=os.environ["SMARAN_API_KEY"], base_url=os.environ["SMARAN_URL"])
+
+async def on_user_turn_completed(self, turn_ctx, new_message):
+    text = new_message.text_content or ""
+    hits = await smaran.recall(text, user_id=self.user_id, top_k=5)
+    if hits:
+        turn_ctx.add_message(
+            role="system",
+            content="Relevant facts you already know about this user:\n" + "\n".join(f"- {h.text}" for h in hits),
+        )
+    await smaran.save(text, user_id=self.user_id, session_id=self.session_id)
 ```
 
-## Wire it in
+## Node agents
+
+`@smaranai/adapter-livekit` (`npm i @smaranai/adapter-livekit`; first release pending) wraps a `StreamingSession`:
 
 ```ts
-import { LiveKitMemoryAdapter } from "@smaran/adapter-livekit"
-import { createMemoryClient } from "@smaran/sdk"
+import { Smaran } from "@smaranai/sdk-ts"
+import { LiveKitVoiceAdapter, memoryTools } from "@smaranai/adapter-livekit"
 
-const memory = createMemoryClient({ apiKey: process.env.SMARAN_API_KEY })
-const adapter = new LiveKitMemoryAdapter(memory, {
-  sessionId: room.name,
-  userId: participant.identity,
-})
+const smaran = new Smaran({ apiKey: process.env.SMARAN_API_KEY!, baseUrl: process.env.SMARAN_URL })
+const adapter = new LiveKitVoiceAdapter({ memory: smaran, sessionId: roomName, userId })
 
-agent.on("user_speech_committed", async (turn) => {
-  const ctx = await adapter.onUserSpeech(turn.text)
-  agent.setContextPrefix(ctx)  // <150-token digest of recalled memories
-})
-
-agent.on("agent_speech_committed", async (turn) => {
-  await adapter.onAgentSpeech(turn.text)
-})
+adapter.onPartialTranscript(partialText)          // as ASR streams
+adapter.onFinalTranscript(finalText)              // saves the turn (non-blocking)
+const prefix = await adapter.buildContextPrefix(finalText) // "<recalled-memories>…" or ""
+// For function calling: memoryTools() declarations + adapter.handleFunctionCall(call)
 ```
-
-The adapter caps the recalled context at 150 tokens by default — enough to seed the LLM without blowing the turn budget. Tune with `{ maxContextTokens: 300 }`.
-
-## Latency
-
-`onUserSpeech` is the only call in the hot path. It's designed to complete in under 3ms against the hosted API (measured p50). If you're self-hosting Smaran on the same box as the LiveKit worker, expect sub-1ms.
-
-<Callout tone="info" title="Selective save">
-By default, only user turns are saved. Enable `{ saveAgentTurns: true }` if you want the assistant's replies in memory too (useful for auditing, not for recall context).
-</Callout>

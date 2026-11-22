@@ -75,3 +75,23 @@ async def test_save_returns_true_when_stored():
     with patch("httpx.AsyncClient.post", AsyncMock(return_value=fake)):
         saved = await client.save(text="my birthday is March 14", user_id="u1")
     assert saved is True
+
+
+@pytest.mark.asyncio
+async def test_retries_transient_errors_then_succeeds():
+    responses = [_fake_response(503, {}), _fake_response(200, {"hits": []})]
+    smaran = Smaran(api_key="sk_test", base_url="https://example.com", max_retries=2)
+    with patch("httpx.AsyncClient.post", AsyncMock(side_effect=responses)) as mock_post:
+        assert await smaran.recall("q", user_id="u") == []
+    assert mock_post.call_count == 2
+    await smaran.aclose()
+
+
+@pytest.mark.asyncio
+async def test_does_not_retry_client_errors():
+    smaran = Smaran(api_key="sk_test", base_url="https://example.com", max_retries=2)
+    with patch("httpx.AsyncClient.post", AsyncMock(return_value=_fake_response(400, {}))) as mock_post:
+        with pytest.raises(SmaranAPIError):
+            await smaran.recall("q", user_id="u")
+    assert mock_post.call_count == 1
+    await smaran.aclose()

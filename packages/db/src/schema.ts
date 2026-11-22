@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import {
+	boolean,
 	customType,
 	index,
 	integer,
@@ -42,6 +43,23 @@ export const tenants = pgTable("tenants", {
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.notNull()
 		.defaultNow(),
+	// Migration 0007. NULL limits = server default rate / unlimited memories.
+	plan: text("plan").notNull().default("free"),
+	contactEmail: text("contact_email"),
+	memoryQuota: integer("memory_quota"),
+	rateLimitPerMinute: integer("rate_limit_per_minute"),
+})
+
+export const invites = pgTable("invites", {
+	codeHash: text("code_hash").primaryKey(),
+	note: text("note"),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.notNull()
+		.defaultNow(),
+	usedAt: timestamp("used_at", { withTimezone: true }),
+	tenantId: text("tenant_id").references(() => tenants.id, {
+		onDelete: "set null",
+	}),
 })
 
 export const apiKeys = pgTable(
@@ -137,9 +155,6 @@ export const memories = pgTable(
 		tenantIdx: index("memories_tenant_idx").on(t.tenantId),
 		sessionIdx: index("memories_session_idx").on(t.sessionId),
 		userIdx: index("memories_user_idx").on(t.userId),
-		embedHnsw: index("memories_embedding_hnsw")
-			.using("hnsw", t.embedding.op("vector_cosine_ops"))
-			.with({ m: 16, ef_construction: 64 }),
 		currentIdx: index("memories_tenant_user_current_idx")
 			.on(t.tenantId, t.userId, t.validUntil)
 			.where(sql`valid_until IS NULL`),
@@ -243,5 +258,33 @@ export const relations = pgTable(
 	(t) => ({
 		tenantIdx: index("relations_tenant_idx").on(t.tenantId),
 		fromIdx: index("relations_from_idx").on(t.fromEntityId),
+	}),
+)
+
+export const consents = pgTable(
+	"consents",
+	{
+		id: text("id").primaryKey(),
+		tenantId: text("tenant_id")
+			.notNull()
+			.references(() => tenants.id, { onDelete: "cascade" }),
+		userId: text("user_id").notNull(),
+		sessionId: text("session_id"),
+		kind: text("kind", {
+			enum: ["record", "process", "retain", "share"],
+		}).notNull(),
+		granted: boolean("granted").notNull(),
+		scope: text("scope"),
+		recordedAt: timestamp("recorded_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	(t) => ({
+		tenantUserIdx: index("consents_tenant_user_idx").on(
+			t.tenantId,
+			t.userId,
+			t.kind,
+			t.recordedAt,
+		),
 	}),
 )

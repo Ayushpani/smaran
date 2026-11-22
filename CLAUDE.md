@@ -20,7 +20,9 @@ Postgres + pgvector (`packages/db`).
   `src/index.ts` only loads env and serves.
 - `apps/mcp` — MCP server (Cloudflare Durable Object) proxying to `/v1`.
 - `apps/edge-recall`, `apps/reranker-worker` — optional Cloudflare Workers.
-- `apps/site` — marketing site and docs (`apps/site/content/docs`).
+- `apps/site` — website: landing (GSAP + lazy three.js), docs
+  (`apps/site/content/docs`), `/signup` and `/console` (API-key login, keys,
+  usage, save/recall playground). Three palettes as tokens in `globals.css`.
 - `apps/starter-vapi`, `apps/voice-agent-livekit` — runnable voice demos.
 - `packages/core` — save/recall engine: sentence segmentation, kind
   classification, slot-revision detection, 4-channel RRF recall (dense,

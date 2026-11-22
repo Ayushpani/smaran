@@ -1,25 +1,36 @@
 # @repo/site
 
-Smaran marketing site — Next.js 15 (app router), deploys to Vercel.
+The Smaran website: landing page, docs, sign-up and console. Next.js 15
+(app router), GSAP for scroll and text animation, three.js for the
+architecture scene (loaded lazily when that section mounts).
 
 ## Dev
 
 ```bash
 bun install
-bun run dev
+NEXT_PUBLIC_SMARAN_API_URL=http://localhost:8787 bun run dev
 ```
 
-Opens `http://localhost:3001`.
-
-## Deploy
-
-Vercel project rooted at `apps/site`. Framework preset `Next.js`. No env vars needed for the landing.
+Opens `http://localhost:3001`. `NEXT_PUBLIC_SMARAN_API_URL` is the Smaran API
+that sign-up and the console talk to; it is inlined at build time. Without it
+the sign-up page says sign-up isn't open, and the console asks for a server.
+The API must allow the site's origin (`CORS_ORIGIN`, default `*`).
 
 ## Structure
 
-- `app/page.tsx` — landing route (delegates to `landing.client.tsx`).
-- `app/landing.client.tsx` — the whole landing page as one client component (12 sections, cursor, rail spine, story scrub, tape strip, adapter tabs, wave canvas).
-- `app/globals.css` — full stylesheet, matte cream + blue token system.
-- `app/layout.tsx` — Google Fonts + metadata.
+- `app/page.tsx` — landing: hero (live self-correction), architecture
+  (pinned three.js scene), story (pinned caller history), स्मरण interlude
+  with the language demo, recall fusion, numbers, code, start.
+- `app/docs/**` — MDX docs from `content/docs`, sidebar, contents, pager.
+- `app/signup` — `POST /v1/signup`; hands the new key to the console.
+- `app/console` — log in with an API key (kept in sessionStorage), usage,
+  key create/revoke, and a playground that calls `/v1/memories` and
+  `/v1/recall` and shows corrections, channels and latency.
+- `components/site` — nav, footer, palette switch, grain.
+- `components/landing` — one file per landing section.
+- `lib/palette.ts` — palettes (cobalt, ink, chalk). The choice is stored in
+  localStorage and applied before first paint; dark-mode users start on ink.
+- `app/globals.css` — every colour is a token per palette.
 
-Docs pages will land at `app/docs/**` as MDX in a follow-up commit.
+Every number on the landing page comes from `RESULTS.md`. With
+`prefers-reduced-motion`, every section renders its finished state.

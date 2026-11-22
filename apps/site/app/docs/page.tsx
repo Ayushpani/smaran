@@ -16,7 +16,7 @@ const HERO_CARDS = [
 	{
 		slug: "docs/voice",
 		title: "Voice concepts",
-		body: "Partial + commit, self-correction, filler scrub. How the pipeline actually thinks.",
+		body: "Partial and final transcripts, self-correction, fillers. What happens to a voice turn.",
 	},
 	{
 		slug: "docs/sdk",
@@ -26,30 +26,29 @@ const HERO_CARDS = [
 	{
 		slug: "docs/api",
 		title: "REST API",
-		body: "One endpoint per operation. Bring your key, get your memory.",
+		body: "Every endpoint, with request and response shapes. OpenAPI included.",
 	},
 ]
 
 export default function DocsIndex() {
 	return (
 		<div className="doc-shell">
-			<Sidebar current="docs" />
+			<Sidebar current="docs" sections={SIDEBAR} />
 			<main className="doc-main doc-index">
 				<div className="doc-eyebrow">Documentation</div>
 				<h1 className="doc-index-h1">
-					Ship a voice-native memory layer in <em>five minutes.</em>
+					Memory for your voice agent, running in five minutes.
 				</h1>
 				<p className="doc-index-lede">
-					Smaran is a memory layer for AI voice agents that corrects itself the
-					way a good listener does. Pick a starting point below, or use the
-					sidebar to jump anywhere.
+					Smaran stores what callers meant after they correct themselves, keeps
+					the history of every fact, and recalls it in English, Hindi and
+					Hinglish. Start with the quickstart, or jump to what you need.
 				</p>
 				<div className="doc-grid">
 					{HERO_CARDS.map((c) => (
 						<Link key={c.slug} href={`/${c.slug}`} className="doc-card">
 							<div className="doc-card-t">{c.title}</div>
 							<div className="doc-card-b">{c.body}</div>
-							<div className="doc-card-arr">→</div>
 						</Link>
 					))}
 				</div>

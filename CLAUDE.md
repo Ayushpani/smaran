@@ -13,8 +13,11 @@ Postgres + pgvector (`packages/db`).
 
 - `apps/api` — the HTTP API. `/v1/memories`, `/v1/recall`, `/v1/ingest`,
   `/v1/sessions/:id/subscribe` (SSE). Persistent mode adds `/v1/graph`,
-  `/v1/models`, `/v1/profile`, `/v1/dpdp`. Auth is a Bearer API key
-  (SHA-256 hashed in `api_keys`); sandbox mode uses one fixed key.
+  `/v1/models`, `/v1/profile`, `/v1/dpdp`, `/v1/keys`, `/v1/usage` and
+  public `/v1/signup` (`SIGNUP_MODE`). Auth is a Bearer API key (SHA-256
+  hashed in `api_keys`); sandbox mode uses one fixed key. Wiring lives in
+  `src/app.ts` (`createApp(env)` — tests build instances with `parseEnv`);
+  `src/index.ts` only loads env and serves.
 - `apps/mcp` — MCP server (Cloudflare Durable Object) proxying to `/v1`.
 - `apps/edge-recall`, `apps/reranker-worker` — optional Cloudflare Workers.
 - `apps/site` — marketing site and docs (`apps/site/content/docs`).
@@ -41,6 +44,7 @@ Postgres + pgvector (`packages/db`).
 - `bun run scripts/benchmark-voice-turns.ts` — voice-turn accuracy suite
   against a running API.
 - `DATABASE_URL=... bun --filter @repo/db db:migrate` — apply migrations.
+- `bun run keys …` — tenants, keys, invites, plan limits (`packages/db/src/keys.ts`).
 
 ## Conventions
 

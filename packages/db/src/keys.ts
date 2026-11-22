@@ -8,6 +8,8 @@
  *   bun run keys key:list <tenantId>             → key ids, labels, status
  *   bun run keys key:revoke <keyId>              → revoke (effective ≤30s)
  *   bun run keys tenant:list
+ *   bun run keys invite:create [note]           → single-use signup code (SIGNUP_MODE=invite)
+ *   bun run keys tenant:limits <tenantId> <memoryQuota|null> <reqPerMin|null> [plan]
  */
 import postgres from "postgres"
 

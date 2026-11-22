@@ -106,18 +106,19 @@ describe("hardening", () => {
 		expect(res.status).toBe(413)
 	})
 
-	test("rate limit returns 429 with Retry-After per key", async () => {
+	test("the account's rate limit returns 429 with Retry-After", async () => {
 		let limited: Response | undefined
 		for (let i = 0; i < 45 && !limited; i++) {
-			const r = await call("/v1/recall", { query: "x" }, "burst-key")
+			const r = await call("/v1/recall", { query: "x" })
 			if (r.status === 429) limited = r
 		}
 		expect(limited).toBeDefined()
 		expect(Number(limited!.headers.get("retry-after"))).toBeGreaterThan(0)
-		// A different key is unaffected.
-		expect((await call("/v1/recall", { query: "hello there" })).status).toBe(
-			200,
-		)
+		expect(((await limited!.json()) as { error: { code: string } }).error.code).toBe("rate_limited")
+	})
+
+	test("invalid keys are rejected before reaching the account limiter", async () => {
+		expect((await call("/v1/recall", { query: "x" }, "burst-key")).status).toBe(401)
 	})
 })
 

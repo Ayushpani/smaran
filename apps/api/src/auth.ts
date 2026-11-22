@@ -7,6 +7,11 @@ import { HTTPException } from "hono/http-exception"
 export interface AuthContext {
 	tenantId: string
 	apiKeyId: string
+	plan?: string
+	/** Max stored memories; null/undefined = unlimited. */
+	memoryQuota?: number | null
+	/** Requests per minute; null/undefined = server default. */
+	rateLimitPerMinute?: number | null
 }
 
 declare module "hono" {
@@ -32,20 +37,35 @@ async function hashKey(key: string): Promise<string> {
 const KEY_CACHE_TTL_MS = 30_000
 const KEY_CACHE_MAX = 10_000
 
-export function apiKeyAuth(db: Db): MiddlewareHandler {
+export interface ApiKeyAuth extends MiddlewareHandler {
+	/** Drop a key from this instance's cache (e.g. right after revoking it). */
+	evict(apiKeyId: string): void
+}
+
+export function apiKeyAuth(db: Db): ApiKeyAuth {
 	const cache = new Map<
 		string,
 		{ value: AuthContext | null; expiresAt: number }
 	>()
-	return async (c, next) => {
+	const middleware: MiddlewareHandler = async (c, next) => {
 		const token = readBearer(c)
 		const hashed = await hashKey(token)
 		const now = Date.now()
 		let entry = cache.get(hashed)
 		if (!entry || entry.expiresAt <= now) {
 			const [row] = await db
-				.select({ id: schema.apiKeys.id, tenantId: schema.apiKeys.tenantId })
+				.select({
+					id: schema.apiKeys.id,
+					tenantId: schema.apiKeys.tenantId,
+					plan: schema.tenants.plan,
+					memoryQuota: schema.tenants.memoryQuota,
+					rateLimitPerMinute: schema.tenants.rateLimitPerMinute,
+				})
 				.from(schema.apiKeys)
+				.innerJoin(
+					schema.tenants,
+					eq(schema.tenants.id, schema.apiKeys.tenantId),
+				)
 				.where(
 					and(
 						eq(schema.apiKeys.hashedKey, hashed),
@@ -54,7 +74,15 @@ export function apiKeyAuth(db: Db): MiddlewareHandler {
 				)
 				.limit(1)
 			entry = {
-				value: row ? { tenantId: row.tenantId, apiKeyId: row.id } : null,
+				value: row
+					? {
+							tenantId: row.tenantId,
+							apiKeyId: row.id,
+							plan: row.plan,
+							memoryQuota: row.memoryQuota,
+							rateLimitPerMinute: row.rateLimitPerMinute,
+						}
+					: null,
 				expiresAt: now + KEY_CACHE_TTL_MS,
 			}
 			if (cache.size >= KEY_CACHE_MAX) cache.clear()
@@ -65,7 +93,16 @@ export function apiKeyAuth(db: Db): MiddlewareHandler {
 		c.set("auth", entry.value)
 		await next()
 	}
+	return Object.assign(middleware, {
+		evict(apiKeyId: string) {
+			for (const [k, v] of cache)
+				if (v.value?.apiKeyId === apiKeyId) cache.delete(k)
+		},
+	})
 }
+
+/** SHA-256 hex of an API key — the only form keys are stored in. */
+export { hashKey }
 
 /**
  * Sandbox auth — one hardcoded key = one tenant. Used only when

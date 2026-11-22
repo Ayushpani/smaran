@@ -217,6 +217,68 @@ export class Smaran {
 		return this.request("POST", "/v1/dpdp/consent", opts)
 	}
 
+	/** Persistent mode: plan, stored-memory count and limits for this account. */
+	usage(): Promise<{
+		tenantId: string
+		plan: string
+		memories: number
+		limits: { memories: number | null; requestsPerMinute: number | null }
+	}> {
+		return this.request("GET", "/v1/usage")
+	}
+
+	/** Persistent mode: this account's API keys (never the raw key). */
+	listKeys(): Promise<{
+		keys: Array<{
+			id: string
+			label: string | null
+			createdAt: string
+			revokedAt: string | null
+			current: boolean
+		}>
+	}> {
+		return this.request("GET", "/v1/keys")
+	}
+
+	/** Persistent mode: create an API key. The raw key is returned once. */
+	createKey(label?: string): Promise<{ keyId: string; apiKey: string }> {
+		return this.request("POST", "/v1/keys", label ? { label } : {})
+	}
+
+	/** Persistent mode: revoke a key (the server refuses to revoke the last active one). */
+	async revokeKey(keyId: string): Promise<void> {
+		await this.request("DELETE", `/v1/keys/${encodeURIComponent(keyId)}`)
+	}
+
+	/**
+	 * Create an account on a server with SIGNUP_MODE=open|invite. Returns
+	 * the first API key (shown once) — pass it to `new Smaran({ apiKey })`.
+	 */
+	static async signup(
+		baseUrl: string,
+		opts: {
+			name: string
+			email?: string
+			invite?: string
+			fetch?: typeof fetch
+		},
+	): Promise<{
+		tenantId: string
+		keyId: string
+		apiKey: string
+		plan: string
+		limits: { memories: number; requestsPerMinute: number }
+	}> {
+		const { fetch: fetchFn = fetch, ...body } = opts
+		const res = await fetchFn(`${baseUrl.replace(/\/$/, "")}/v1/signup`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		})
+		if (!res.ok) throw await toError(res)
+		return (await res.json()) as never
+	}
+
 	/** Live memory events for a session (Server-Sent Events). */
 	async *subscribe(
 		sessionId: string,

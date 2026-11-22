@@ -65,7 +65,9 @@ const STATUS_CODES: Record<number, string> = {
 	400: "bad_request",
 	401: "unauthorized",
 	403: "forbidden",
+	402: "quota_exceeded",
 	404: "not_found",
+	409: "conflict",
 	413: "payload_too_large",
 	429: "rate_limited",
 }
@@ -123,13 +125,17 @@ export function validationHook(
  * take the API down.
  */
 export function rateLimit(opts: {
-	perMinute: number
+	/** Requests per minute — fixed, or per request (e.g. from the tenant's plan). */
+	perMinute: number | ((c: Context) => number)
 	key: (c: Context) => string
 	store?: RateLimitStore
 }): MiddlewareHandler {
-	const limit = Math.max(1, opts.perMinute)
 	const store = opts.store ?? createMemoryRateLimitStore()
 	return async (c, next) => {
+		const limit = Math.max(
+			1,
+			typeof opts.perMinute === "function" ? opts.perMinute(c) : opts.perMinute,
+		)
 		let decision: RateLimitDecision
 		try {
 			decision = await store.hit(opts.key(c), limit)
@@ -183,4 +189,12 @@ export function validate<
 	S extends import("zod").ZodTypeAny,
 >(target: T, schema: S) {
 	return zValidator(target, schema, validationHook as never)
+}
+
+/**
+ * Best-effort client address for limiting unauthenticated traffic: the
+ * first X-Forwarded-For hop (set by your load balancer), else a constant.
+ */
+export function clientIp(c: Context): string {
+	return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "direct"
 }

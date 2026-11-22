@@ -43,6 +43,23 @@ export const tenants = pgTable("tenants", {
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.notNull()
 		.defaultNow(),
+	// Migration 0007. NULL limits = server default rate / unlimited memories.
+	plan: text("plan").notNull().default("free"),
+	contactEmail: text("contact_email"),
+	memoryQuota: integer("memory_quota"),
+	rateLimitPerMinute: integer("rate_limit_per_minute"),
+})
+
+export const invites = pgTable("invites", {
+	codeHash: text("code_hash").primaryKey(),
+	note: text("note"),
+	createdAt: timestamp("created_at", { withTimezone: true })
+		.notNull()
+		.defaultNow(),
+	usedAt: timestamp("used_at", { withTimezone: true }),
+	tenantId: text("tenant_id").references(() => tenants.id, {
+		onDelete: "set null",
+	}),
 })
 
 export const apiKeys = pgTable(

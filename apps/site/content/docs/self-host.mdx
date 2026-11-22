@@ -50,6 +50,24 @@ bun run keys key:revoke <keyId>     # takes effect within 30 s (auth cache)
 
 Only a SHA-256 hash of each key is stored.
 
+## Letting customers sign up
+
+Set `SIGNUP_MODE` to let developers create their own accounts through `POST /v1/signup` or the site's `/signup` page (build the site with `NEXT_PUBLIC_SMARAN_API_URL` pointing at your API):
+
+- `invite` — recommended to start. Each signup needs a single-use code:
+  ```bash
+  bun run keys invite:create "Acme pilot"
+  ```
+- `open` — anyone can sign up, limited to `SIGNUP_PER_IP_PER_MINUTE` per client IP.
+
+New accounts get the free plan: `FREE_MEMORY_QUOTA` memories and `FREE_RATE_LIMIT_PER_MINUTE` requests a minute. Change one account's plan or limits (use `null` for unlimited / server default):
+
+```bash
+bun run keys tenant:limits ten_… 1000000 3000 pro
+```
+
+Customers manage their own keys with `GET/POST /v1/keys` and `DELETE /v1/keys/:id`, and see usage at `GET /v1/usage`.
+
 ## Configuration
 
 | Variable | Default | |
@@ -63,7 +81,12 @@ Only a SHA-256 hash of each key is stored.
 | `RERANKER` | `local` | `local` (free cross-encoder, English queries) or `none`. |
 | `RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | |
 | `RERANK_POOL` | `20` | Candidates the reranker re-orders. |
-| `RATE_LIMIT_PER_MINUTE` | `600` | Per API key. Shared across instances in Postgres mode. |
+| `RATE_LIMIT_PER_MINUTE` | `600` | Per account, unless its plan sets one. Shared across instances in Postgres mode. |
+| `RATE_LIMIT_PER_IP_PER_MINUTE` | `1200` | Before authentication, per client IP (first `X-Forwarded-For` hop). |
+| `SIGNUP_MODE` | `off` | `off`, `invite` or `open`. |
+| `SIGNUP_PER_IP_PER_MINUTE` | `3` | |
+| `FREE_MEMORY_QUOTA` | `10000` | Memories per new self-serve account. |
+| `FREE_RATE_LIMIT_PER_MINUTE` | `120` | Requests a minute per new self-serve account. |
 | `SHARED_STATE` | `auto` | Where rate limits, voice turn buffers and live events live: `postgres` (default with `STORE=supabase`) or `memory`. |
 | `EVENTS_DATABASE_URL` | `DATABASE_URL` | Direct (session-mode) connection for `LISTEN/NOTIFY`. Transaction poolers such as Supabase's port 6543 don't support `LISTEN` — use the direct URL. |
 | `MAX_BODY_BYTES` | `262144` | |

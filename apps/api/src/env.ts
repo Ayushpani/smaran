@@ -28,6 +28,18 @@ const schema = z
 		EVENTS_DATABASE_URL: z.string().optional(),
 		// Requests per minute per API key (token bucket, per process).
 		RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(600),
+		// Before auth, per client IP — blunts floods of invalid keys.
+		RATE_LIMIT_PER_IP_PER_MINUTE: z.coerce
+			.number()
+			.int()
+			.positive()
+			.default(1200),
+		// Self-serve signup: "off" (default), "invite" (single-use codes from
+		// `bun run keys invite:create`), or "open". Persistent mode only.
+		SIGNUP_MODE: z.enum(["off", "invite", "open"]).default("off"),
+		SIGNUP_PER_IP_PER_MINUTE: z.coerce.number().int().positive().default(3),
+		FREE_MEMORY_QUOTA: z.coerce.number().int().positive().default(10_000),
+		FREE_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(120),
 		MAX_BODY_BYTES: z.coerce
 			.number()
 			.int()
@@ -46,11 +58,22 @@ const schema = z
 
 export type Env = z.infer<typeof schema>
 
-export function loadEnv(): Env {
-	const parsed = schema.safeParse(process.env)
+/** Parse and validate configuration; throws on invalid input (tests build envs with this). */
+export function parseEnv(input: Record<string, string | undefined>): Env {
+	const parsed = schema.safeParse(input)
 	if (!parsed.success) {
-		console.error("env validation failed:", parsed.error.flatten().fieldErrors)
-		process.exit(1)
+		throw new Error(
+			`invalid configuration: ${JSON.stringify(parsed.error.flatten().fieldErrors)}`,
+		)
 	}
 	return parsed.data
+}
+
+export function loadEnv(): Env {
+	try {
+		return parseEnv(process.env)
+	} catch (err) {
+		console.error(err instanceof Error ? err.message : err)
+		process.exit(1)
+	}
 }

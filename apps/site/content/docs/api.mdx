@@ -104,6 +104,16 @@ With `STORE=supabase`:
 - `POST /v1/graph/entities`, `/entities/extract`, `/relations`, `/traverse` — entity graph.
 - `GET|POST /v1/models`, `POST /v1/models/:id/activate` — per-tenant reranker registry.
 
+## Accounts and keys (persistent mode)
+
+- `POST /v1/signup` — **public**. `{ "name": "Acme", "email": "ops@acme.dev", "invite": "inv_…" }` → `201` with `tenantId`, `keyId`, `apiKey` (shown once) and the plan's `limits`. Only when the server runs with `SIGNUP_MODE=open` or `invite` (`invite` requires a single-use code); rate limited per IP.
+- `GET /v1/usage` — plan, stored-memory count and limits.
+- `GET /v1/keys` — this account's keys (ids, labels, dates — never the raw key); the one you're calling with is marked `current`.
+- `POST /v1/keys` `{ "label": "backend" }` — new key, returned once.
+- `DELETE /v1/keys/:id` — revoke; takes effect immediately on the instance that handled it and within 30 s elsewhere. Revoking your last active key is refused (`409`).
+
+Saving beyond the plan's memory quota returns `402` with code `quota_exceeded`.
+
 ## Errors
 
 Every error has one shape, with a request id you can quote in bug reports (also in the `X-Request-Id` header):
@@ -116,9 +126,12 @@ Every error has one shape, with a request id you can quote in bug reports (also 
 |---|---|---|
 | 400 | `invalid_request` | Body/query failed validation; the message names the fields. |
 | 401 | `unauthorized` | Missing, invalid or revoked API key. |
+| 402 | `quota_exceeded` | The plan's memory quota is reached. |
+| 403 | `forbidden` | Signup disabled, or invite missing/invalid. |
 | 404 | `not_found` | Unknown route or resource. |
+| 409 | `conflict` | E.g. revoking your last active key. |
 | 413 | `payload_too_large` | Body over `MAX_BODY_BYTES` (default 256 KiB). |
-| 429 | `rate_limited` | Over `RATE_LIMIT_PER_MINUTE` for this key (default 600); see `Retry-After`. |
+| 429 | `rate_limited` | Over your plan's requests per minute (server default `RATE_LIMIT_PER_MINUTE`, 600); see `Retry-After`. |
 | 500 | `internal_error` | Unexpected failure. Details are logged server-side without personal data. |
 
 ## Health

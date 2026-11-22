@@ -99,6 +99,19 @@ await smaran.forgetUser("u_alice")         // erase memories, sessions, profile
 await smaran.recordConsent({ userId: "u_alice", kind: "record", granted: true })
 ```
 
+## Accounts
+
+```ts
+// On a server with SIGNUP_MODE=open|invite:
+const { apiKey } = await Smaran.signup("https://api.example.com", { name: "Acme", invite: "inv_…" })
+
+const smaran = new Smaran({ apiKey, baseUrl: "https://api.example.com" })
+await smaran.usage()               // plan, memory count, limits
+await smaran.createKey("backend")  // { keyId, apiKey } — shown once
+await smaran.listKeys()
+await smaran.revokeKey(keyId)      // the last active key can't be revoked
+```
+
 ## Live events
 
 ```ts

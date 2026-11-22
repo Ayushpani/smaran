@@ -10,6 +10,7 @@ import {
 import { commitInput, partialInput } from "./routes/ingest.ts"
 import { deleteParams, saveInput } from "./routes/memories.ts"
 import { activateInput, listQuery, registerInput } from "./routes/models.ts"
+import { createKeyInput, keyParams, signupInput } from "./routes/account.ts"
 import { userIdQuery } from "./routes/profile.ts"
 import { recallInput } from "./routes/recall.ts"
 
@@ -61,9 +62,16 @@ const ok = (description: string, schema?: Json): Json => ({
 const errors = {
 	"400": { $ref: "#/components/responses/Invalid" },
 	"401": { $ref: "#/components/responses/Unauthorized" },
+	"402": { $ref: "#/components/responses/QuotaExceeded" },
 	"429": { $ref: "#/components/responses/RateLimited" },
 }
 const open = { type: "object", additionalProperties: true }
+const errorResp = (description: string) => ({
+	description,
+	content: {
+		"application/json": { schema: { $ref: "#/components/schemas/Error" } },
+	},
+})
 
 function op(summary: string, extra: Json): Json {
 	return {
@@ -202,6 +210,45 @@ export function buildOpenApi(opts: { persistent: boolean }): Json {
 
 	if (opts.persistent) {
 		Object.assign(paths, {
+			"/v1/signup": {
+				post: {
+					summary: "Create an account (tenant + first API key)",
+					description:
+						"Public. Enabled by SIGNUP_MODE=open|invite; `invite` requires a single-use code. The API key is returned once.",
+					security: [],
+					requestBody: body(signupInput),
+					responses: {
+						"201": ok("Tenant, key id, API key and plan limits", open),
+						"400": { $ref: "#/components/responses/Invalid" },
+						"403": errorResp("Signup disabled, or invite missing/invalid"),
+						"429": { $ref: "#/components/responses/RateLimited" },
+					},
+				},
+			},
+			"/v1/keys": {
+				get: op("List this account's API keys", {
+					responses: { "200": ok("Keys (never the raw key)", open) },
+				}),
+				post: op("Create an API key", {
+					requestBody: body(createKeyInput),
+					responses: { "201": ok("Key id and the raw key (shown once)", open) },
+				}),
+			},
+			"/v1/keys/{id}": {
+				delete: op("Revoke an API key", {
+					parameters: params("path", keyParams),
+					responses: {
+						"204": ok("Revoked"),
+						"404": { $ref: "#/components/responses/NotFound" },
+						"409": errorResp("Refused: it is the last active key"),
+					},
+				}),
+			},
+			"/v1/usage": {
+				get: op("Plan, memory count and limits", {
+					responses: { "200": ok("Usage", open) },
+				}),
+			},
 			"/v1/profile": {
 				get: op("Get a user's consolidated profile", {
 					parameters: params("query", userIdQuery),
@@ -322,6 +369,9 @@ export function buildOpenApi(opts: { persistent: boolean }): Json {
 				Unauthorized: errorResponse("Missing or invalid API key"),
 				NotFound: errorResponse("Not found"),
 				RateLimited: errorResponse("Rate limit exceeded; see Retry-After"),
+				QuotaExceeded: errorResponse(
+					"Plan memory quota reached (code: quota_exceeded)",
+				),
 			},
 		},
 	}

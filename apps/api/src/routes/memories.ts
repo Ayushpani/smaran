@@ -4,6 +4,7 @@ import { Hono } from "hono"
 import { z } from "zod"
 import { auth } from "../auth.ts"
 import { prepareText } from "../prepare.ts"
+import type { QuotaGuard } from "../quota.ts"
 
 export const saveInput = z.object({
 	text: z.string().min(1).max(50_000),
@@ -15,7 +16,7 @@ export const saveInput = z.object({
 
 export const deleteParams = z.object({ id: z.string().min(1) })
 
-export function memoriesRouter(core: MemoryCore) {
+export function memoriesRouter(core: MemoryCore, quota?: QuotaGuard) {
 	return new Hono()
 		.post("/", validate("json", saveInput), async (c) => {
 			const { tenantId } = auth(c)
@@ -26,12 +27,14 @@ export function memoriesRouter(core: MemoryCore) {
 				return c.json({ memories: [], skipped: prepared.skip })
 			}
 
+			await quota?.beforeSave(auth(c))
 			const memories = await core.save({
 				tenantId,
 				...body,
 				text: prepared.text,
 				metadata: { ...(body.metadata ?? {}), ...prepared.metadata },
 			})
+			quota?.afterSave(auth(c), memories.length)
 			return c.json({ memories })
 		})
 		.delete("/:id", validate("param", deleteParams), async (c) => {

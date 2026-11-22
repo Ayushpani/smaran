@@ -6,6 +6,7 @@ import { z } from "zod"
 import type { IngestBuffers } from "@repo/db"
 import { auth } from "../auth.ts"
 import { prepareText } from "../prepare.ts"
+import type { QuotaGuard } from "../quota.ts"
 
 /**
  * Streaming-ingest endpoints for voice agents.
@@ -60,6 +61,7 @@ export function createMemoryIngestBuffers(): IngestBuffers {
 export function ingestRouter(
 	core: MemoryCore,
 	buffers: IngestBuffers = createMemoryIngestBuffers(),
+	quota?: QuotaGuard,
 ) {
 	return new Hono()
 		.post("/partial", validate("json", partialInput), async (c) => {
@@ -92,6 +94,7 @@ export function ingestRouter(
 					text: scrubbed.text,
 				})
 			}
+			await quota?.beforeSave(auth(c))
 			const memories = await core.save({
 				tenantId,
 				userId: body.userId ?? null,
@@ -100,6 +103,7 @@ export function ingestRouter(
 				source: body.source,
 				metadata: { ...prepared.metadata, asrFillersRemoved: scrubbed.removed },
 			})
+			quota?.afterSave(auth(c), memories.length)
 			return c.json({ saved: true, memories, text: prepared.text })
 		})
 		.get("/stats", async (c) => c.json(await buffers.stats(auth(c).tenantId)))

@@ -60,6 +60,24 @@ bun run try                              # terminal 1 (fresh process — no prio
 bun run scripts/benchmark-locomo.ts      # terminal 2
 ```
 
+### LoCoMo answer accuracy (LLM-as-judge) — not yet measured
+
+Retrieval hit rates above are not the number most memory products publish; those report end-to-end answer accuracy graded by an LLM. `scripts/benchmark-locomo-qa.ts` runs that protocol against this API: recall (top 10) → an answer model replies from the recalled memories only (each shown with its session date) → a judge model labels the reply CORRECT/WRONG against the gold answer. It writes a per-category table plus a JSON file with every question's context, answer and verdict for audit.
+
+No figure is published here yet: it needs a capable LLM. The pipeline has only been verified end to end against a mock endpoint (whose score is meaningless). To produce a real, comparable number at no per-call cost, serve an open model on a rented GPU with any OpenAI-compatible server, for example:
+
+```bash
+# On the GPU machine
+vllm serve Qwen/Qwen2.5-14B-Instruct --port 8000
+
+# Here, against a fresh API
+bun run try
+ANSWER_BASE_URL=http://<gpu-host>:8000/v1 ANSWER_MODEL=Qwen/Qwen2.5-14B-Instruct \
+  bun run scripts/benchmark-locomo-qa.ts --concurrency=16
+```
+
+Use the same answer and judge models when comparing against other systems — the judge model changes the score.
+
 ### Voice-turn suite
 
 `scripts/benchmark-voice-turns.ts`, 7 cases (self-correction, Hinglish, confirmation questions, refinement across turns): **7/7**. Save p50 5.2 ms, recall p50 4.0 ms.

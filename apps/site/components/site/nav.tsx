@@ -46,13 +46,16 @@ export function SiteNav({ overHero = false }: { overHero?: boolean }) {
 					<Link className="hide-sm hide-md" href="/#architecture">
 						How it works
 					</Link>
-					<Link className="hide-sm" href="/#features">
+					<Link className="hide-sm hide-md" href="/#features">
 						Features
 					</Link>
 					<Link className="hide-sm" href="/#integrations">
 						Integrations
 					</Link>
-					<Link href="/docs" aria-current={cur("/docs")}>
+					<Link href="/playground" aria-current={cur("/playground")}>
+						Playground
+					</Link>
+					<Link className="hide-xs" href="/docs" aria-current={cur("/docs")}>
 						Docs
 					</Link>
 					<a

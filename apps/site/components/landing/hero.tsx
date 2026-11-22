@@ -402,8 +402,8 @@ export function Hero() {
 							<Link className="btn btn-solid" href="/signup">
 								Get an API key
 							</Link>
-							<Link className="btn btn-ghost" href="/docs/quickstart">
-								Run it in one command
+							<Link className="btn btn-ghost" href="/playground">
+								Talk to it now
 							</Link>
 						</div>
 					</div>

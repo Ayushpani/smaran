@@ -43,7 +43,7 @@ What was dropped is recorded on the stored memory in `metadata.corrections` (`ki
 
 ## Questions and fillers
 
-- Pure confirmation questions ("is that 13 or 913?") are not stored. Statements that end in a question mark but carry a fact ("my address is 12 MG Road, right?") are.
+- Each turn is split into sentences, and sentences that only ask are dropped: "is that 13 or 913?", "when is my appointment?", "mera order kya hai?". The rest of the turn is kept, so "Hi, I'm Rohan. What time do you open?" stores "Hi, I'm Rohan." Requests ("can I see Dr. Mehta on Friday?") and statements with a tag ("my address is 12 MG Road, right?") carry facts and are stored. Dropped questions are listed in `metadata.questionsDropped`.
 - On the voice path, hesitation sounds (`um`, `uh`, `er`, `hmm`) and stutters ("my my") are removed. Words that carry meaning — `like`, `actually` — are kept.
 - Hinglish filler words (`matlab`, `achha`, `yaani`…) are removed when surrounded by content.
 

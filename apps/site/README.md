@@ -16,6 +16,28 @@ that sign-up and the console talk to; it is inlined at build time. Without it
 the sign-up page says sign-up isn't open, and the console asks for a server.
 The API must allow the site's origin (`CORS_ORIGIN`, default `*`).
 
+## Playground
+
+`/playground` lets visitors talk to demo agents (browser speech in and out)
+with Smaran memory, next to the same agent without memory. Its server routes
+(`app/api/playground/*`) need these server-side variables; without them the
+page shows an example conversation instead.
+
+| Variable                  | What it is                                                               |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `SMARAN_PLAYGROUND_URL`   | A Smaran API the playground stores demo memories in                      |
+| `SMARAN_PLAYGROUND_KEY`   | An API key for a tenant used only by the playground                      |
+| `PLAYGROUND_LLM_API_KEY`  | Key for any OpenAI-compatible chat API (Groq and Gemini have free tiers) |
+| `PLAYGROUND_LLM_BASE_URL` | Defaults to `https://api.groq.com/openai/v1`                             |
+| `PLAYGROUND_LLM_MODEL`    | Defaults to `openai/gpt-oss-20b`                                         |
+
+Each visitor gets an anonymous ID in localStorage; memories are stored per
+visitor and agent as `pg-<id>-<agent>`, and "Erase my demo memories" calls
+the DPDP erase endpoint, which needs Postgres mode. Per-visitor and per-IP
+daily turn limits live in `lib/playground/limits.ts`; the playground tenant's
+own rate limit is the global cap. The agent loop is `lib/playground/agent.ts`
+and uses `@smaranai/sdk-ts`.
+
 ## Structure
 
 - `app/page.tsx` — landing: hero (live self-correction), architecture

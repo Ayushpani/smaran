@@ -14,8 +14,10 @@ const schema = z
 		// recall (+17 pts hit@1 on LoCoMo, ~70 ms). "none": skip reranking.
 		RERANKER: z.enum(["local", "none"]).default("local"),
 		RERANK_MODEL: z.string().default("Xenova/ms-marco-MiniLM-L-6-v2"),
-		// Candidates the reranker re-orders (more = slower, little gain past 20).
-		RERANK_POOL: z.coerce.number().int().min(1).max(100).default(20),
+		// Candidates the reranker re-orders per query (overridable per request
+		// with `rerankPool`). Measured on LoCoMo: 20 → 75.3% hit@10 at 94 ms,
+		// 40 → 78.8% at 138 ms, 60 → 80.1% at 191 ms.
+		RERANK_POOL: z.coerce.number().int().min(1).max(100).default(40),
 		OPENAI_API_KEY: z.string().optional(),
 		OPENAI_BASE_URL: z.string().optional(),
 		OPENAI_EMBED_MODEL: z.string().default("text-embedding-3-small"),

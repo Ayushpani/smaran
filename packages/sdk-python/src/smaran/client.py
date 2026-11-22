@@ -146,6 +146,8 @@ class Smaran:
         session_id: Optional[str] = None,
         top_k: int = 5,
         include_cross_session: bool = True,
+        rerank: Optional[bool] = None,
+        rerank_pool: Optional[int] = None,
     ) -> list[MemoryHit]:
         """Recall memories relevant to ``query`` for ``user_id``.
 
@@ -163,6 +165,10 @@ class Smaran:
         }
         if session_id:
             payload["sessionId"] = session_id
+        if rerank is not None:
+            payload["rerank"] = rerank
+        if rerank_pool is not None:
+            payload["rerankPool"] = rerank_pool
 
         resp = await self._request("post", "/v1/recall", "recall", json=payload)
 
@@ -266,6 +272,53 @@ class Smaran:
         if scope:
             payload["scope"] = scope
         return (await self._request("post", "/v1/dpdp/consent", "consent", json=payload)).json()
+
+
+    async def usage(self) -> dict[str, Any]:
+        """Persistent mode: plan, stored-memory count and limits for this account."""
+        return (await self._request("get", "/v1/usage", "usage")).json()
+
+    async def list_keys(self) -> list[dict[str, Any]]:
+        """Persistent mode: this account's API keys (never the raw key)."""
+        return (await self._request("get", "/v1/keys", "list_keys")).json()["keys"]
+
+    async def create_key(self, label: Optional[str] = None) -> dict[str, Any]:
+        """Persistent mode: create an API key. ``apiKey`` in the result is shown once."""
+        body: dict[str, Any] = {"label": label} if label else {}
+        return (await self._request("post", "/v1/keys", "create_key", json=body)).json()
+
+    async def revoke_key(self, key_id: str) -> None:
+        """Persistent mode: revoke a key (the last active key can't be revoked)."""
+        await self._request("delete", f"/v1/keys/{key_id}", "revoke_key")
+
+    @staticmethod
+    async def signup(
+        base_url: str,
+        name: str,
+        email: Optional[str] = None,
+        invite: Optional[str] = None,
+        timeout: float = DEFAULT_TIMEOUT_S,
+    ) -> dict[str, Any]:
+        """Create an account on a server with SIGNUP_MODE=open|invite.
+
+        Returns ``tenantId``, ``keyId``, ``apiKey`` (shown once), ``plan`` and
+        ``limits``. Pass the key to ``Smaran(api_key=...)``.
+        """
+        body: dict[str, Any] = {"name": name}
+        if email:
+            body["email"] = email
+        if invite:
+            body["invite"] = invite
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(f"{base_url.rstrip('/')}/v1/signup", json=body)
+        except httpx.HTTPError as e:
+            raise SmaranNetworkError("Smaran signup request failed", e) from e
+        if resp.status_code >= 400:
+            raise SmaranAPIError(
+                "Smaran signup failed", status_code=resp.status_code, response_text=resp.text
+            )
+        return resp.json()
 
 
 def _backoff(attempt: int) -> float:

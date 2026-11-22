@@ -14,6 +14,12 @@ export const recallInput = z.object({
 	includeCrossSession: z.boolean().default(true),
 	/** Re-order with the reranker when one is configured (default on). */
 	rerank: z.boolean().default(true),
+	/**
+	 * Candidates the reranker re-orders (server default RERANK_POOL=40).
+	 * Larger = better recall, slower: on LoCoMo 20→60 raises hit@10
+	 * 75.3%→80.1% at ~94→191 ms per query.
+	 */
+	rerankPool: z.number().int().min(1).max(100).optional(),
 	/** Point-in-time recall: ISO timestamp, defaults to now (current facts only). */
 	asOf: z.string().datetime().optional(),
 })
@@ -30,8 +36,11 @@ export function recallRouter(
 		const reranker = resolved?.reranker ?? null
 
 		// Retrieve a wider pool for the reranker to choose from, then trim.
-		const poolSize = reranker ? Math.max(body.topK, rerankPool) : body.topK
-		const result = await core.recall({ tenantId, ...body, topK: poolSize })
+		const poolSize = reranker
+			? Math.max(body.topK, body.rerankPool ?? rerankPool)
+			: body.topK
+		const { rerankPool: _pool, ...query } = body
+		const result = await core.recall({ tenantId, ...query, topK: poolSize })
 		const texts = result.hits.map((h) => h.memory.text)
 
 		// The built-in cross-encoder is English-only: only use it where it

@@ -11,17 +11,28 @@ Every number quoted anywhere on the site, README or docs must resolve to a run i
 
 `scripts/benchmark-locomo.ts` saves every dialogue turn of the 10 LoCoMo conversations (5,882 turns) through `POST /v1/memories`, then asks every question through `POST /v1/recall` with `topK=10`. A question is a hit@k if one of its labelled evidence turns is in the top k; "full evidence" needs all of them. Category 5 (unanswerable by design) is excluded. This measures retrieval only, not end-to-end answer accuracy (that needs an LLM judge).
 
-**Default configuration** (local cross-encoder reranking on, `RERANKER=local`):
+**Default configuration** (local cross-encoder reranking on, `RERANKER=local`, `RERANK_POOL=40`):
 
 | Category          | Questions | Hit@1     | Hit@5     | Hit@10    | Full evidence@10 | MRR@10    |
 | ----------------- | --------- | --------- | --------- | --------- | ---------------- | --------- |
-| multi-hop         | 282       | 41.1%     | 65.6%     | 72.0%     | 19.5%            | 0.522     |
-| temporal          | 321       | 58.3%     | 75.7%     | 79.4%     | 74.1%            | 0.653     |
-| open-domain       | 92        | 19.6%     | 40.2%     | 46.7%     | 29.3%            | 0.287     |
-| single-hop        | 841       | 54.0%     | 73.1%     | 76.7%     | 74.3%            | 0.622     |
-| **All (cat 1-4)** | **1536**  | **51.0%** | **70.3%** | **74.7%** | **61.6%**        | **0.593** |
+| multi-hop         | 282       | 42.9%     | 69.9%     | 74.8%     | 21.6%            | 0.545     |
+| temporal          | 321       | 59.2%     | 76.9%     | 80.7%     | 73.8%            | 0.661     |
+| open-domain       | 92        | 21.7%     | 43.5%     | 47.8%     | 33.7%            | 0.307     |
+| single-hop        | 841       | 54.5%     | 75.1%     | 80.0%     | 77.3%            | 0.632     |
+| **All (cat 1-4)** | **1536**  | **51.4%** | **72.7%** | **77.3%** | **63.7%**        | **0.603** |
 
-Save p50 12.4 ms / p95 24.4 ms (n=5882). Recall p50 98 ms / p95 125 ms (n=1536), of which reranking is ~50–80 ms.
+Save p50 12.4 ms / p95 24.4 ms (n=5882). Recall p50 142 ms / p95 179 ms (n=1536), most of it reranking.
+
+**Rerank pool size** (in-process harness, all 1536 questions; `rerankPool` per request or `RERANK_POOL`):
+
+| Pool             | Hit@1 | Hit@10 | Full evidence@10 | Multi-hop full evidence | Time / query |
+| ---------------- | ----- | ------ | ---------------- | ----------------------- | ------------ |
+| 20               | 52.1% | 75.3%  | 62.1%            | 18.1%                   | 94 ms        |
+| 30               | 52.3% | 76.8%  | 63.5%            | 19.5%                   | 116 ms       |
+| **40 (default)** | 52.5% | 78.8%  | 65.2%            | 21.6%                   | 138 ms       |
+| 60               | 52.5% | 80.1%  | 66.5%            | 24.8%                   | 191 ms       |
+
+Diversifying the top 10 did **not** help multi-hop questions (evidence spread across sessions) — it was measured and rejected. Pool 40 with: session-diverse ordering (≤2 per session first) 74.6% hit@10 / 20.9% multi-hop full; MMR λ=0.7 76.0% / 20.2%; MMR λ=0.85 76.6% / 20.9%; versus plain reranking 78.8% / 21.6%. The limit is how many candidates the reranker sees, not redundancy. Previous default (pool 20) via the API: hit@1 51.0%, hit@10 74.7%, recall p50 98 ms.
 
 **Fast path** (`rerank: false` per request, or `RERANKER=none`): Hit@1 38.0%, Hit@5 62.3%, Hit@10 71.3%, full evidence 59.0%, MRR 0.485; recall p50 14.8 ms / p95 22.3 ms.
 

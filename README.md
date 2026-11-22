@@ -178,8 +178,8 @@ Smaran is a working codebase, not yet a validated product. Being explicit about 
 
 **Shipped but not proven yet**:
 
-- Recall quality — measured on the public LoCoMo benchmark with the default free local models (embedder + cross-encoder reranker): the right memory is ranked first for 51.0% of questions and is in the top 10 for 74.7%. See [RESULTS.md](RESULTS.md); end-to-end answer accuracy with an LLM is not yet measured.
-- Latency — recall p50 ≈ 100 ms with reranking, ≈ 15 ms without (`rerank: false`), in-process on a 4-vCPU machine (RESULTS.md); not yet measured with Postgres over a network or on real voice-agent traffic.
+- Recall quality — measured on the public LoCoMo benchmark with the default free local models (embedder + cross-encoder reranker): the right memory is ranked first for 51.4% of questions and is in the top 10 for 77.3%. See [RESULTS.md](RESULTS.md); end-to-end answer accuracy with an LLM is not yet measured.
+- Latency — recall p50 ≈ 140 ms with reranking (tunable per request with `rerankPool`), ≈ 15 ms without (`rerank: false`), in-process on a 4-vCPU machine (RESULTS.md); not yet measured with Postgres over a network or on real voice-agent traffic.
 - Semantic (embedding-based) self-correction — a language-agnostic replacement for the current English-only retraction cue list exists (`applySelfCorrectionSemantic`) but regressed under the sandbox's stub embedder in testing, so it isn't wired into the live route yet. Needs validation against a real embedder first.
 
 **On the roadmap** (planned, not yet code):

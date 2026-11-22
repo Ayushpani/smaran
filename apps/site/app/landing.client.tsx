@@ -795,19 +795,19 @@ export default function Landing() {
 								<span>
 									smaran voice layer — full recall, reranked, injected
 								</span>
-								<span className="tot">100ms</span>
+								<span className="tot">140ms</span>
 							</div>
 							<div className="bz-track">
 								<div
 									className="bz-seg head"
 									style={{
-										width: "20.8%",
+										width: "29.2%",
 										minWidth: 8,
 										background: "var(--moss)",
 									}}
 								/>
 								<div className="room">
-									380ms of headroom → natural conversation
+									340ms of headroom → natural conversation
 								</div>
 								<div className="bz-mark">
 									<i />
@@ -879,7 +879,7 @@ export default function Landing() {
 						</div>
 						<div className="g">
 							<span className="k">Recall</span>
-							<span className="v vg">100ms</span>
+							<span className="v vg">140ms</span>
 						</div>
 					</div>
 					<div className="st-rail" id="stRail">
@@ -964,10 +964,10 @@ export default function Landing() {
 									Reranked <em>semantic recall.</em>
 								</h3>
 								<p>
-									Meaning plus keyword search fused in one pass, on a free
-									multilingual model running on plain CPU. p50 from the public
-									LoCoMo benchmark in RESULTS.md — reproducible, not a datasheet
-									promise.
+									Meaning and keyword search fused, then re-ordered by a free
+									cross-encoder — all on plain CPU. Right memory first for 51%
+									of LoCoMo questions, in the top 10 for 77% (RESULTS.md) —
+									reproducible, not a datasheet promise.
 								</p>
 							</div>
 							<span className="spec">
@@ -1174,7 +1174,7 @@ export default function Landing() {
 								</div>
 								<div className="ac-met">
 									<span>Save 13ms</span>
-									<b>Recall 100ms</b>
+									<b>Recall 140ms</b>
 								</div>
 							</article>
 						))}

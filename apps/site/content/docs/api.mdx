@@ -59,6 +59,7 @@ Skipped questions return `{ "memories": [], "skipped": "question-or-tooshort" }`
 | `topK` | `8` | 1–50. |
 | `includeCrossSession` | `true` | `false` restricts to `sessionId`. |
 | `rerank` | `true` | Re-order the top candidates with the reranker (built-in local cross-encoder for English, or the tenant's configured one). `false` = fastest path. |
+| `rerankPool` | `40` | How many candidates the reranker sees (1–100). More = better recall, slower: on LoCoMo 20 → 75% hit@10 at ~94 ms, 60 → 80% at ~191 ms. |
 | `asOf` | now | ISO timestamp: what was true at that moment. |
 
 ```json

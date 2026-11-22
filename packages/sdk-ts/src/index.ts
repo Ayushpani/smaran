@@ -68,6 +68,8 @@ export interface SmaranRecallOptions {
 	topK?: number
 	includeCrossSession?: boolean
 	rerank?: boolean
+	/** Candidates the reranker re-orders (server default 40). Bigger = better recall, slower. */
+	rerankPool?: number
 	/** Point-in-time recall (ISO timestamp). */
 	asOf?: string
 }
